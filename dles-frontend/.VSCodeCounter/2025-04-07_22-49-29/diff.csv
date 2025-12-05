@@ -1,0 +1,15 @@
+"filename", "language", "JSON with Comments", "JSON", "Vue", "TypeScript", "comment", "blank", "total"
+"e:\DLES_System\dles-frontend\DLES\package-lock.json", "JSON", 0, 16, 0, 0, 0, 0, 16
+"e:\DLES_System\dles-frontend\DLES\package.json", "JSON", 0, 1, 0, 0, 0, 0, 1
+"e:\DLES_System\dles-frontend\DLES\src\enhance-page\component\enhance-dialogue.vue", "Vue", 0, 0, 16, 0, 0, 0, 16
+"e:\DLES_System\dles-frontend\DLES\src\enhance-page\enhance-page.vue", "Vue", 0, 0, 2, 0, 0, 0, 2
+"e:\DLES_System\dles-frontend\DLES\src\init-page\main-page.vue", "Vue", 0, 0, 6, 0, 0, 0, 6
+"e:\DLES_System\dles-frontend\DLES\src\login-page\main-login.vue", "Vue", 0, 0, 1, 0, 0, 0, 1
+"e:\DLES_System\dles-frontend\DLES\src\router\index.ts", "TypeScript", 0, 0, 0, 12, 2, 0, 14
+"e:\DLES_System\dles-frontend\DLES\src\train-page\code-page\api\code-api.ts", "TypeScript", 0, 0, 0, 6, 0, 2, 8
+"e:\DLES_System\dles-frontend\DLES\src\train-page\code-page\qwen-code.vue", "Vue", 0, 0, 192, 0, 0, 8, 200
+"e:\DLES_System\dles-frontend\DLES\src\train-page\code-page\service\code-service.ts", "TypeScript", 0, 0, 0, 10, 0, 2, 12
+"e:\DLES_System\dles-frontend\DLES\src\train-page\code-page\type\code-type.ts", "TypeScript", 0, 0, 0, 4, 0, 1, 5
+"e:\DLES_System\dles-frontend\DLES\src\train-page\train\train-page.vue", "Vue", 0, 0, 10, 0, 0, 4, 14
+"e:\DLES_System\dles-frontend\DLES\tsconfig.json", "JSON with Comments", 6, 0, 0, 0, 0, 0, 6
+"Total", "-", 6, 17, 227, 32, 2, 17, 301

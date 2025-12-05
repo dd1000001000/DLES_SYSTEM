@@ -1,0 +1,22 @@
+[
+  {
+    "role": "assistant",
+    "content": "你好，让我来帮你增强表格吧。"
+  },
+  {
+    "role": "user",
+    "content": "增强要求默认"
+  },
+  {
+    "role": "assistant",
+    "content": "提取的关键词如下：\n增强方式：连接和联合\n重点关注列：\n期望列数：6\n填充方式：模型预测的方式\n"
+  },
+  {
+    "role": "user",
+    "content": "开始增强"
+  },
+  {
+    "role": "assistant",
+    "content": "提取的关键词和上次一致。"
+  }
+]

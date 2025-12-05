@@ -1,0 +1,10 @@
+{
+  "pure_table_path": "E:/DLES_System/datalake",
+  "user_table_temp_path": "E:/DLES_System/temp_data_lake",
+  "pure_embedding_path": "E:/DLES_System/datalake_embedding_before",
+  "user_pure_embedding_path": "E:/DLES_System/temp_datalake_embedding_before",
+  "max_token_length": 510,
+  "model_path": "E:/DLES_System/models/jinaai/jina-embeddings-v2-base-en",
+  "embedding_length": 768,
+  "batch_sz": 16
+}

@@ -1,0 +1,7 @@
+{
+  "model_path": "models/full_trained_model.pth",
+  "pure_embedding_path": "E:/DLES_System/datalake_embedding_before",
+  "user_pure_embedding_path": "E:/DLES_System/temp_datalake_embedding_before",
+  "processed_embedding_path": "E:/DLES_System/datalake_embedding_after",
+  "user_processed_embedding_path": "E:/DLES_System/temp_datalake_embedding_after"
+}

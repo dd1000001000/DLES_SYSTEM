@@ -1,0 +1,116 @@
+Date : 2025-04-07 22:49:29
+Directory : e:\DLES_System\dles-frontend
+Total : 50 files,  6256 codes, 40 comments, 220 blanks, all 6516 lines
+
+Languages
++--------------------+------------+------------+------------+------------+------------+
+| language           | files      | code       | comment    | blank      | total      |
++--------------------+------------+------------+------------+------------+------------+
+| JSON               |          5 |      3,560 |          3 |          8 |      3,571 |
+| Vue                |         15 |      1,932 |         14 |        116 |      2,062 |
+| TypeScript         |         21 |        597 |         23 |         60 |        680 |
+| CSS                |          1 |         90 |          0 |         15 |        105 |
+| Markdown           |          3 |         31 |          0 |         17 |         48 |
+| JavaScript         |          2 |         19 |          0 |          2 |         21 |
+| JSON with Comments |          1 |         13 |          0 |          1 |         14 |
+| HTML               |          1 |         13 |          0 |          1 |         14 |
+| XML                |          1 |          1 |          0 |          0 |          1 |
++--------------------+------------+------------+------------+------------+------------+
+
+Directories
++---------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| path                                                                                  | files      | code       | comment    | blank      | total      |
++---------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+| .                                                                                     |         50 |      6,256 |         40 |        220 |      6,516 |
+| . (Files)                                                                             |          2 |         28 |          0 |         14 |         42 |
+| DLES                                                                                  |         48 |      6,228 |         40 |        206 |      6,474 |
+| DLES (Files)                                                                          |         11 |      3,613 |          4 |         17 |      3,634 |
+| DLES\public                                                                           |          1 |          1 |          0 |          0 |          1 |
+| DLES\src                                                                              |         36 |      2,614 |         36 |        189 |      2,839 |
+| DLES\src (Files)                                                                      |          5 |        156 |          4 |         31 |        191 |
+| DLES\src\enhance-page                                                                 |          8 |        946 |         14 |         61 |      1,021 |
+| DLES\src\enhance-page (Files)                                                         |          1 |        106 |          0 |          7 |        113 |
+| DLES\src\enhance-page\api                                                             |          1 |        101 |          0 |         10 |        111 |
+| DLES\src\enhance-page\component                                                       |          3 |        663 |         14 |         39 |        716 |
+| DLES\src\enhance-page\service                                                         |          1 |         64 |          0 |          2 |         66 |
+| DLES\src\enhance-page\type                                                            |          2 |         12 |          0 |          3 |         15 |
+| DLES\src\init-page                                                                    |          8 |        468 |          0 |         29 |        497 |
+| DLES\src\init-page (Files)                                                            |          1 |        102 |          0 |          8 |        110 |
+| DLES\src\init-page\api                                                                |          1 |         30 |          0 |          3 |         33 |
+| DLES\src\init-page\components                                                         |          2 |        282 |          0 |         13 |        295 |
+| DLES\src\init-page\service                                                            |          1 |         14 |          0 |          2 |         16 |
+| DLES\src\init-page\store                                                              |          1 |         31 |          0 |          1 |         32 |
+| DLES\src\init-page\type                                                               |          2 |          9 |          0 |          2 |         11 |
+| DLES\src\login-page                                                                   |          7 |        645 |          0 |         41 |        686 |
+| DLES\src\login-page (Files)                                                           |          1 |         45 |          0 |          5 |         50 |
+| DLES\src\login-page\api                                                               |          1 |         50 |          0 |          6 |         56 |
+| DLES\src\login-page\components                                                        |          3 |        496 |          0 |         24 |        520 |
+| DLES\src\login-page\service                                                           |          1 |         36 |          0 |          2 |         38 |
+| DLES\src\login-page\type                                                              |          1 |         18 |          0 |          4 |         22 |
+| DLES\src\router                                                                       |          1 |         84 |          5 |          3 |         92 |
+| DLES\src\train-page                                                                   |          5 |        222 |          0 |         17 |        239 |
+| DLES\src\train-page\code-page                                                         |          4 |        212 |          0 |         13 |        225 |
+| DLES\src\train-page\code-page (Files)                                                 |          1 |        192 |          0 |          8 |        200 |
+| DLES\src\train-page\code-page\api                                                     |          1 |          6 |          0 |          2 |          8 |
+| DLES\src\train-page\code-page\service                                                 |          1 |         10 |          0 |          2 |         12 |
+| DLES\src\train-page\code-page\type                                                    |          1 |          4 |          0 |          1 |          5 |
+| DLES\src\train-page\train                                                             |          1 |         10 |          0 |          4 |         14 |
+| DLES\src\util                                                                         |          2 |         93 |         13 |          7 |        113 |
++---------------------------------------------------------------------------------------+------------+------------+------------+------------+------------+
+
+Files
++---------------------------------------------------------------------------------------+--------------------+------------+------------+------------+------------+
+| filename                                                                              | language           | code       | comment    | blank      | total      |
++---------------------------------------------------------------------------------------+--------------------+------------+------------+------------+------------+
+| e:\DLES_System\dles-frontend\DLES\.eslintrc.js                                        | JavaScript         |         15 |          0 |          1 |         16 |
+| e:\DLES_System\dles-frontend\DLES\.prettierrc                                         | JSON               |         22 |          0 |          1 |         23 |
+| e:\DLES_System\dles-frontend\DLES\README.md                                           | Markdown           |          3 |          0 |          3 |          6 |
+| e:\DLES_System\dles-frontend\DLES\index.html                                          | HTML               |         13 |          0 |          1 |         14 |
+| e:\DLES_System\dles-frontend\DLES\package-lock.json                                   | JSON               |      3,471 |          0 |          1 |      3,472 |
+| e:\DLES_System\dles-frontend\DLES\package.json                                        | JSON               |         35 |          0 |          1 |         36 |
+| e:\DLES_System\dles-frontend\DLES\public\vite.svg                                     | XML                |          1 |          0 |          0 |          1 |
+| e:\DLES_System\dles-frontend\DLES\src\App.vue                                         | Vue                |         12 |          0 |          4 |         16 |
+| e:\DLES_System\dles-frontend\DLES\src\enhance-page\api\enhance-history-api.ts         | TypeScript         |        101 |          0 |         10 |        111 |
+| e:\DLES_System\dles-frontend\DLES\src\enhance-page\component\enhance-dialogue.vue     | Vue                |        237 |          1 |         13 |        251 |
+| e:\DLES_System\dles-frontend\DLES\src\enhance-page\component\enhance-main.vue         | Vue                |         57 |          0 |         10 |         67 |
+| e:\DLES_System\dles-frontend\DLES\src\enhance-page\component\history-tree.vue         | Vue                |        369 |         13 |         16 |        398 |
+| e:\DLES_System\dles-frontend\DLES\src\enhance-page\enhance-page.vue                   | Vue                |        106 |          0 |          7 |        113 |
+| e:\DLES_System\dles-frontend\DLES\src\enhance-page\service\enhance-history-service.ts | TypeScript         |         64 |          0 |          2 |         66 |
+| e:\DLES_System\dles-frontend\DLES\src\enhance-page\type\enhance-dialouge-type.ts      | TypeScript         |          4 |          0 |          1 |          5 |
+| e:\DLES_System\dles-frontend\DLES\src\enhance-page\type\enhance-history-tree-type.ts  | TypeScript         |          8 |          0 |          2 |         10 |
+| e:\DLES_System\dles-frontend\DLES\src\init-page\api\sttings-api.ts                    | TypeScript         |         30 |          0 |          3 |         33 |
+| e:\DLES_System\dles-frontend\DLES\src\init-page\components\home.vue                   | Vue                |         18 |          0 |          4 |         22 |
+| e:\DLES_System\dles-frontend\DLES\src\init-page\components\settings.vue               | Vue                |        264 |          0 |          9 |        273 |
+| e:\DLES_System\dles-frontend\DLES\src\init-page\main-page.vue                         | Vue                |        102 |          0 |          8 |        110 |
+| e:\DLES_System\dles-frontend\DLES\src\init-page\service\settings-service.ts           | TypeScript         |         14 |          0 |          2 |         16 |
+| e:\DLES_System\dles-frontend\DLES\src\init-page\store\userInfo.ts                     | TypeScript         |         31 |          0 |          1 |         32 |
+| e:\DLES_System\dles-frontend\DLES\src\init-page\type\settings-type.ts                 | TypeScript         |          4 |          0 |          1 |          5 |
+| e:\DLES_System\dles-frontend\DLES\src\init-page\type\user-type.ts                     | TypeScript         |          5 |          0 |          1 |          6 |
+| e:\DLES_System\dles-frontend\DLES\src\login-page\api\login-api.ts                     | TypeScript         |         50 |          0 |          6 |         56 |
+| e:\DLES_System\dles-frontend\DLES\src\login-page\components\login.vue                 | Vue                |         77 |          0 |          7 |         84 |
+| e:\DLES_System\dles-frontend\DLES\src\login-page\components\recover.vue               | Vue                |        216 |          0 |          9 |        225 |
+| e:\DLES_System\dles-frontend\DLES\src\login-page\components\register.vue              | Vue                |        203 |          0 |          8 |        211 |
+| e:\DLES_System\dles-frontend\DLES\src\login-page\main-login.vue                       | Vue                |         45 |          0 |          5 |         50 |
+| e:\DLES_System\dles-frontend\DLES\src\login-page\service\login-servive.ts             | TypeScript         |         36 |          0 |          2 |         38 |
+| e:\DLES_System\dles-frontend\DLES\src\login-page\type\login-type.ts                   | TypeScript         |         18 |          0 |          4 |         22 |
+| e:\DLES_System\dles-frontend\DLES\src\main.ts                                         | TypeScript         |         30 |          3 |          7 |         40 |
+| e:\DLES_System\dles-frontend\DLES\src\not-found.vue                                   | Vue                |         24 |          0 |          4 |         28 |
+| e:\DLES_System\dles-frontend\DLES\src\router\index.ts                                 | TypeScript         |         84 |          5 |          3 |         92 |
+| e:\DLES_System\dles-frontend\DLES\src\style.css                                       | CSS                |         90 |          0 |         15 |        105 |
+| e:\DLES_System\dles-frontend\DLES\src\train-page\code-page\api\code-api.ts            | TypeScript         |          6 |          0 |          2 |          8 |
+| e:\DLES_System\dles-frontend\DLES\src\train-page\code-page\qwen-code.vue              | Vue                |        192 |          0 |          8 |        200 |
+| e:\DLES_System\dles-frontend\DLES\src\train-page\code-page\service\code-service.ts    | TypeScript         |         10 |          0 |          2 |         12 |
+| e:\DLES_System\dles-frontend\DLES\src\train-page\code-page\type\code-type.ts          | TypeScript         |          4 |          0 |          1 |          5 |
+| e:\DLES_System\dles-frontend\DLES\src\train-page\train\train-page.vue                 | Vue                |         10 |          0 |          4 |         14 |
+| e:\DLES_System\dles-frontend\DLES\src\util\request.ts                                 | TypeScript         |         60 |         12 |          6 |         78 |
+| e:\DLES_System\dles-frontend\DLES\src\util\stingfy.ts                                 | TypeScript         |         33 |          1 |          1 |         35 |
+| e:\DLES_System\dles-frontend\DLES\src\vite-env.d.ts                                   | TypeScript         |          0 |          1 |          1 |          2 |
+| e:\DLES_System\dles-frontend\DLES\tsconfig.app.json                                   | JSON               |         12 |          1 |          2 |         15 |
+| e:\DLES_System\dles-frontend\DLES\tsconfig.js                                         | JavaScript         |          4 |          0 |          1 |          5 |
+| e:\DLES_System\dles-frontend\DLES\tsconfig.json                                       | JSON with Comments |         13 |          0 |          1 |         14 |
+| e:\DLES_System\dles-frontend\DLES\tsconfig.node.json                                  | JSON               |         20 |          2 |          3 |         25 |
+| e:\DLES_System\dles-frontend\DLES\vite.config.ts                                      | TypeScript         |          5 |          1 |          2 |          8 |
+| e:\DLES_System\dles-frontend\README.en.md                                             | Markdown           |         25 |          0 |         12 |         37 |
+| e:\DLES_System\dles-frontend\README.md                                                | Markdown           |          3 |          0 |          2 |          5 |
+| Total                                                                                 |                    |      6,256 |         40 |        220 |      6,516 |
++---------------------------------------------------------------------------------------+--------------------+------------+------------+------------+------------+

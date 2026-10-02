@@ -13,7 +13,7 @@ code_generation_router = APIRouter()
 @code_generation_router.post("/generate")
 def code_generation( user_input:GeneCode, current_user: Annotated[User, Depends(get_current_user)]):
     try:
-        codeGenerationService = CodeGenerationService()
+        codeGenerationService = CodeGenerationService(current_user['username'])
         result = codeGenerationService.ask(user_input.userCode,user_input.userInput)
         return {"code":result}
     except Exception as e:

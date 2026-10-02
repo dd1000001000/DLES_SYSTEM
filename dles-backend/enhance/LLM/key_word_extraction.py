@@ -6,14 +6,14 @@ from typing import List, Dict
 
 from enhance.enhance_history_tree.model.models import Dialogue
 from enhance.enhance_main.model.models import EnhanceParas
-from enhance.qwen.qwen import Qwen
+from enhance.LLM.llm_client import LLMClient, LLMConfig, parse_json_output
 
 
 
 class KeyWordExtraction:
-    def __init__(self,model_name:str="qwen-plus"):
+    def __init__(self,config:LLMConfig):
         self.prompt = self.get_prompt()
-        self.qwen = Qwen(model_name)
+        self.llm = LLMClient(config, config.extraction_model)
 
     def get_prompt(self):
         Q1 = "请你帮我进行表格的增强操作，增强时采取连接的增强方式。我希望表格增强后大约有8列左右，对于缺失值，使用平均值填充。这是我的表格列的名称：['name', 'address', 'website']。"
@@ -65,7 +65,7 @@ A3：{A3}"""
             if 'assistant' in history[0]['role']:
                 del history[0]
             history.insert(0, system_prompt)
-            return self.qwen.long_chat(history,user_input)
+            return self.llm.long_chat(history,user_input)
         except Exception as e:
             raise e
 
@@ -80,7 +80,7 @@ A3：{A3}"""
             csv_headers = self.get_csv_headers(table_path)
             u_input = user_input.strip()+f"这是我的表格列的名称：{str(csv_headers)}。"
             # 校验大模型返回的参数，格式不对就直接报错，而不是留到后面才出问题
-            query_result = json.loads(EnhanceParas(**json.loads(self.ask(chat_history,u_input)[0])).model_dump_json())
+            query_result = json.loads(EnhanceParas(**parse_json_output(self.ask(chat_history,u_input)[0])).model_dump_json())
             history = copy.deepcopy(chat_history)
             history.append({"role":"user","content":user_input})
             history.append({"role":"assistant","content":query_result})

@@ -6,12 +6,54 @@ from starlette import status
 from starlette.responses import JSONResponse
 
 from login.service.login_service import LoginService
-from settings.model.models import ChangePassword
+from settings.model.models import ChangePassword, LLMConfigForm
+from settings.service import llm_config_service
+from enhance.LLM.llm_client import LLMError
+from utils.rate_limit import RateLimiter
 from utils.authorization.authorization import get_current_user, set_auth_cookie
 from utils.authorization.models import User, Token
 from ..service.settings_service import SettingsService
 
 settings_router = APIRouter()
+
+# 测试连接会让服务器向用户填写的地址发请求，限制频率
+test_llm_limiter = RateLimiter(max_events=10, window_seconds=600)
+
+
+@settings_router.get('/llm_config')
+def get_llm_config(current_user: Annotated[User, Depends(get_current_user)]):
+    try:
+        return llm_config_service.get_llm_config_view(current_user['username'])
+    except Exception as e:
+        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"message": f"读取模型配置失败: {e}"})
+
+
+@settings_router.post('/llm_config')
+def save_llm_config(form: LLMConfigForm, current_user: Annotated[User, Depends(get_current_user)]):
+    try:
+        username = current_user['username']
+        config = llm_config_service.build_config(username, form.base_url, form.api_key, form.chat_model,
+                                                 form.strategy_model, form.code_model)
+        llm_config_service.save_llm_config(username, config)
+        return llm_config_service.get_llm_config_view(username)
+    except Exception as e:
+        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"message": f"保存模型配置失败: {e}"})
+
+
+@settings_router.post('/llm_config/test')
+def test_llm_config(form: LLMConfigForm, current_user: Annotated[User, Depends(get_current_user)]):
+    username = current_user['username']
+    if test_llm_limiter.is_blocked(username):
+        return JSONResponse(status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                            content={"message": "测试过于频繁，请稍后再试"})
+    test_llm_limiter.record(username)
+    try:
+        config = llm_config_service.build_config(username, form.base_url, form.api_key, form.chat_model,
+                                                 form.strategy_model, form.code_model)
+        reply = llm_config_service.test_llm_config(config)
+        return {"reply": reply}
+    except (ValueError, LLMError, RuntimeError) as e:
+        return JSONResponse(status_code=status.HTTP_400_BAD_REQUEST, content={"message": f"测试失败: {e}"})
 
 
 @settings_router.post('/change_password')

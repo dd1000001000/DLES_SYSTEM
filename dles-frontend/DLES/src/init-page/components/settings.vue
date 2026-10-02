@@ -15,6 +15,7 @@
           >
             <el-anchor-link href="#changePassword" title="修改密码" />
             <el-anchor-link href="#changeAvatar" title="修改头像" />
+            <el-anchor-link href="#llmConfig" title="模型配置" />
             <el-anchor-link href="#back" title="返回" />
           </el-anchor>
         </el-aside>
@@ -108,6 +109,69 @@
               </el-button>
             </div>
             <el-divider />
+            <div id="llmConfig" class="llm-config">
+              <el-alert
+                type="info"
+                :closable="false"
+                show-icon
+                title="表格增强和 AI 写代码会使用这里配置的模型。支持任何兼容 OpenAI 接口的服务（OpenAI、阿里云百炼、DeepSeek、Ollama 等）。"
+                style="margin-bottom: 16px"
+              />
+              <el-form :model="llmForm" label-width="110px">
+                <el-form-item label="模型端点" required>
+                  <el-input
+                    v-model="llmForm.base_url"
+                    placeholder="例如 https://api.openai.com/v1"
+                    clearable
+                  />
+                </el-form-item>
+                <el-form-item label="API Key" required>
+                  <el-input
+                    v-model="llmForm.api_key"
+                    :placeholder="
+                      llmConfigured
+                        ? `已保存（${llmKeyMasked}），留空则不修改`
+                        : '请输入 API Key'
+                    "
+                    type="password"
+                    show-password
+                    autocomplete="off"
+                  />
+                </el-form-item>
+                <el-form-item label="模型名称" required>
+                  <el-input
+                    v-model="llmForm.chat_model"
+                    placeholder="例如 gpt-4o-mini、qwen-plus"
+                    clearable
+                  />
+                </el-form-item>
+                <el-form-item label="策略模型">
+                  <el-input
+                    v-model="llmForm.strategy_model"
+                    placeholder="可选，用于生成表格增强策略，留空则使用上面的模型"
+                    clearable
+                  />
+                </el-form-item>
+                <el-form-item label="代码模型">
+                  <el-input
+                    v-model="llmForm.code_model"
+                    placeholder="可选，用于 AI 写代码，留空则使用上面的模型"
+                    clearable
+                  />
+                </el-form-item>
+              </el-form>
+              <el-button
+                type="primary"
+                :loading="llmSaving"
+                @click="saveLLMConfig"
+              >
+                保存
+              </el-button>
+              <el-button :loading="llmTesting" @click="testLLMConfig">
+                测试连接
+              </el-button>
+            </div>
+            <el-divider />
             <div id="back">
               <el-button type="primary" @click="router.push('/home')">
                 返回主页
@@ -128,7 +192,7 @@ export default {
 </script>
 
 <script setup lang="ts">
-import { reactive, ref } from "vue";
+import { onMounted, reactive, ref } from "vue";
 import { useRouter } from "vue-router";
 import {
   ElMessage,
@@ -203,6 +267,57 @@ function changePasswordManully(
   });
 }
 
+const llmForm = ref({
+  base_url: "",
+  api_key: "",
+  chat_model: "",
+  strategy_model: "",
+  code_model: "",
+});
+const llmConfigured = ref(false);
+const llmKeyMasked = ref("");
+const llmSaving = ref(false);
+const llmTesting = ref(false);
+
+function applyLLMConfig(res: any) {
+  llmConfigured.value = res.configured;
+  llmKeyMasked.value = res.api_key_masked;
+  llmForm.value = {
+    base_url: res.base_url,
+    api_key: "",
+    chat_model: res.chat_model,
+    strategy_model: res.strategy_model,
+    code_model: res.code_model,
+  };
+}
+onMounted(async () => {
+  const res = await settingsService.getLLMConfig();
+  if (!("message" in res)) applyLLMConfig(res);
+});
+async function saveLLMConfig() {
+  llmSaving.value = true;
+  try {
+    const res = await settingsService.saveLLMConfig(llmForm.value);
+    if (!("message" in res)) {
+      applyLLMConfig(res);
+      ElMessage.success("保存模型配置成功！");
+    }
+  } finally {
+    llmSaving.value = false;
+  }
+}
+async function testLLMConfig() {
+  llmTesting.value = true;
+  try {
+    const res = await settingsService.testLLMConfig(llmForm.value);
+    if (!("message" in res)) {
+      ElMessage.success(`连接成功，模型回复：${res.reply}`);
+    }
+  } finally {
+    llmTesting.value = false;
+  }
+}
+
 const avatarFile = ref<UploadRawFile | null>(null);
 const avatarUrl = ref<string | null>(null);
 
@@ -244,6 +359,9 @@ async function uploadAvatar() {
   align-items: center;
   > .changePassword {
     width: 300px;
+  }
+  > .llm-config {
+    width: 600px;
   }
 }
 

@@ -102,5 +102,6 @@ def save_llm_config(username: str, config: LLMConfig) -> None:
 def test_llm_config(config: LLMConfig) -> str:
     """向模型发一个最小的请求，验证端点、Key 和模型名是否可用"""
     client = LLMClient(config, config.chat_model)
-    reply, _, _ = client.ask_one('你是一个连通性测试助手。', '请只回复：ok', output_json=False, max_tokens=16)
-    return reply.strip()[:100]
+    # 给足 token：思考型模型（Qwen3、DeepSeek-R1 等）会先花一部分 token 在思考上
+    reply, _, _ = client.ask_one('你是一个连通性测试助手。', '请只回复：ok', output_json=False, max_tokens=512)
+    return reply.strip()[:100] or '（连接成功，但模型返回了空内容）'

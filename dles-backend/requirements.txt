@@ -1,5 +1,6 @@
 # Versions taken from the original development environment (Python 3.10).
-# For GPU support install torch from https://pytorch.org first (developed with 2.6.0+cu118).
+# Install torch first, matching your GPU (https://pytorch.org). RTX 50-series cards need a CUDA 12.8 build:
+#   pip install torch --index-url https://download.pytorch.org/whl/cu128
 
 fastapi==0.115.11
 uvicorn==0.34.0
@@ -11,13 +12,11 @@ PyMySQL==1.1.1
 PyJWT==2.10.1
 passlib==1.7.4
 
-torch==2.6.0
 transformers==4.49.0
 numpy
 pandas
 scikit-learn
 lightgbm==4.6.0
-hdbscan==0.8.40
 tqdm
 
 openai==1.68.2

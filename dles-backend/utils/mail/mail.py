@@ -8,11 +8,17 @@ from logs.log import error_log, info_log
 from utils.read_config.read_config import get_env
 from utils.verify_code.verify_code import add_or_update_verify_code, can_send_verify_code
 
-my_sender = get_env('DLES_MAIL_SENDER')
-token = get_env('DLES_MAIL_TOKEN')
+
+def mail_credentials():
+    # 邮件账号只在真正发信时才读取：没有配置邮件服务也不影响系统启动，只是不能用邮箱验证码注册/找回密码
+    try:
+        return get_env('DLES_MAIL_SENDER'), get_env('DLES_MAIL_TOKEN')
+    except RuntimeError:
+        raise RuntimeError('服务器还没有配置邮件服务（DLES_MAIL_SENDER / DLES_MAIL_TOKEN），无法发送验证码')
 
 
 def mail(title: str, text: str, receiver: str) -> bool:
+    my_sender, token = mail_credentials()
     try:
         msg = MIMEText(text, 'plain', 'utf-8')  # 填写邮件内容
         msg['From'] = my_sender

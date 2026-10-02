@@ -23,6 +23,18 @@ def read_config(file_path: str):
     return None
 
 
+# 项目根目录（dles-backend 的上一级）。数据湖、预训练模型、向量文件默认放在这里，也可以用 DLES_DATA_DIR 指定别处
+PROJECT_ROOT = Path(__file__).resolve().parents[3]
+
+
+def resolve_data_path(path: str) -> str:
+    """配置文件里的相对路径按数据目录（默认是项目根目录）解析，绝对路径原样使用"""
+    if os.path.isabs(path):
+        return path
+    base = os.getenv('DLES_DATA_DIR') or str(PROJECT_ROOT)
+    return os.path.normpath(os.path.join(base, path))
+
+
 def get_env(name: str) -> str:
     value = os.getenv(name)
     if not value:

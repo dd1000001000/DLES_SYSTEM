@@ -31,7 +31,7 @@ class DSU:
         return True
 
 class Graph2:
-    def __init__(self,  tables: List[NDArray], max_layers = 5,edge_short = 0.145,edge_long = 0.005):
+    def __init__(self,  tables: List[NDArray], max_layers = 5,edge_short = 0.145,edge_long = 0.005, distance = None):
         self.tables = tables
         self.n = len(self.tables)
         if self.n < 2:
@@ -47,7 +47,8 @@ class Graph2:
 
         self.e = [[[] for i in range(self.n)] for _ in range(self.max_layers)]
 
-        self.distance = self.get_distance()
+        # 两两距离的计算量是 O(n²) 次表格相似度，可以由调用方用 GPU 批量算好后传进来
+        self.distance = distance if distance is not None else self.get_distance()
         self.build_graph()
 
     def assign_layers(self):

@@ -4,8 +4,6 @@ from typing import Annotated, List, Dict
 
 from fastapi import APIRouter, Depends
 from starlette.responses import JSONResponse
-# 强制导入，禁止删除
-from transformer.model import TableContrastiveModel, TransformerEncoder
 from enhance.enhance_main.service.enhance_main_service import EnhanceMainService
 from utils.authorization.authorization import get_current_user, ensure_same_user
 from utils.authorization.models import User

@@ -9,7 +9,6 @@ from login.api.login_api import login_router
 from settings.api.settings_api import settings_router
 from enhance import enhance_router
 from train import train_router
-from transformer.model import TransformerEncoder, TableContrastiveModel
 
 
 app = FastAPI()

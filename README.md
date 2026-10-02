@@ -74,7 +74,7 @@ npm install
 npm run dev                                             # http://localhost:5173
 ```
 
-Log in, open Settings → 模型配置 and enter your model endpoint. Registration through the UI needs `DLES_MAIL_SENDER` / `DLES_MAIL_TOKEN` (SMTP) to send the verification code; without them use `scripts.create_user`. `python -m scripts.smoke_test <model> <csv>` runs login → upload → enhance through the HTTP API.
+Log in, open Settings → 模型配置 and enter your model endpoint. Registration through the UI needs `DLES_MAIL_SENDER` / `DLES_MAIL_TOKEN` (SMTP) to send the verification code; without them use `scripts.create_user`. `python -m scripts.smoke_test <model> <csv>` runs login → upload → enhance through the HTTP API. `python -m unittest discover -s tests` (from `dles-backend/`) runs the regression tests for the enhancement logic (JOIN/UNION/fill).
 
 For a local Ollama, set `DLES_ALLOW_PRIVATE_LLM_ENDPOINTS=1`, use `http://localhost:11434/v1` as the endpoint, and start Ollama with `OLLAMA_CONTEXT_LENGTH=16384` — the enhancement prompt contains samples of 9 tables and is far longer than Ollama's default context.
 

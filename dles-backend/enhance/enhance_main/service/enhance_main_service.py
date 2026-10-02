@@ -4,11 +4,13 @@ import csv
 import json
 import os
 import random
+import re
 import shutil
 import string
 import threading
 from typing import List, Dict
 
+import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.preprocessing import LabelEncoder
@@ -27,8 +29,63 @@ from utils.read_config.read_config import read_config, resolve_data_path
 
 config = read_config(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json'))
 
-# 增强过程会占用 GPU 并写用例文件，串行执行；接口是同步函数，会在线程池中运行，不会阻塞其他请求
+# 增强过程会占用 GPU 并写用例文件，串行执行；接口是同步函数，会在线程池中运行，不会阻塞其他请求。
+# 只在向量化/检索和合并/填充两段持有；等待大模型返回（最长几分钟、不占 GPU）的时候不持有，避免其他用户排队
 enhance_lock = threading.Lock()
+
+# 一次 UNION 操作最多追加多少行；相关表可能有成千上万行，全部追加再用模型“预测填充”其余列没有意义
+UNION_MAX_ROWS = 1000
+# 发给大模型的样本表：每个单元格最多保留的字符数、最多保留的列数
+SAMPLE_CELL_CHARS = 60
+SAMPLE_MAX_COLUMNS = 40
+# BERT 填充时每个样本值最多保留的字符数，保证拼出的句子不会超过 512 个 token
+FILL_MASK_VALUE_CHARS = 30
+
+JOIN_KEY_COLUMN = '__dles_join_key__'
+_LEADING_ZERO = re.compile(r'^\s*[-+]?0\d')
+_LONG_DIGITS = re.compile(r'\d{16,}')
+_UNION_JOIN_REF = re.compile(r'\s*(\d+)\.(.+?)\s*\+\s*(\d+)\.(.+)', re.S)
+_UNION_REF = re.compile(r'\s*(\d+)\.(.+)', re.S)
+
+
+def infer_numeric(series: pd.Series) -> pd.Series:
+    """
+    文本列里的值全部能解析成数字时才转成数值列。
+    邮编、编号这类带前导零的值（02134）和超过 16 位的长数字不转，否则写回 CSV 时会变成 2134 或丢失精度。
+    """
+    if pd.api.types.is_numeric_dtype(series):
+        return series
+    non_null = series.dropna()
+    if non_null.empty:
+        return series
+    texts = non_null.astype(str)
+    if texts.str.contains(_LEADING_ZERO).any() or texts.str.contains(_LONG_DIGITS).any():
+        return series
+    converted = pd.to_numeric(series, errors='coerce')
+    if converted.notna().sum() != series.notna().sum():
+        return series
+    return converted
+
+
+def read_table_csv(path: str) -> pd.DataFrame:
+    """读取表格：先全部当文本读入，再按列判断是否是数值列（见 infer_numeric），避免 pandas 自动推断改写数据"""
+    df = pd.read_csv(path, dtype=str, na_values=['.', 'NA'], encoding_errors='replace')
+    for column in df.columns:
+        df[column] = infer_numeric(df[column])
+    return df
+
+
+def join_key(series: pd.Series) -> pd.Series:
+    """
+    JOIN 用的连接键：去掉首尾空格；数值列里值为整数的（1.0）写成 1，这样数字列和文本列（"1"）也能连接。
+    空值保持为空，调用方负责不让空键参与连接。
+    """
+    if pd.api.types.is_numeric_dtype(series) and not pd.api.types.is_bool_dtype(series):
+        key = series.map(lambda v: v if pd.isna(v) else (str(int(v)) if float(v).is_integer() else repr(float(v))))
+    else:
+        key = series.map(lambda v: v if pd.isna(v) else str(v).strip())
+    return key.astype(object).where(series.notna())
+
 
 # 这个类会锁定一个用例
 class EnhanceMainService:
@@ -41,10 +98,8 @@ class EnhanceMainService:
         self._filler = None
 
     def convert_to_numeric_if_possible(self, df: pd.DataFrame, column_name: str) -> None:
-        # 尝试转换整个列为数字（无效值转为 NaN）
-        converted_series = pd.to_numeric(df[column_name], errors="coerce")
-        if not converted_series.isna().any():
-            df[column_name] = converted_series
+        # 整列（不算空值）都能解析成数字才转换
+        df[column_name] = infer_numeric(df[column_name])
 
     def fill_numeric_value_with_model(self, df: pd.DataFrame, target_col: str) -> None:
         if df[target_col].notna().all():
@@ -70,19 +125,23 @@ class EnhanceMainService:
         for col in X_train.columns:
             if pd.api.types.is_numeric_dtype(X_train[col]):
                 median_val = X_train[col].median()
+                if pd.isna(median_val):  # 整列都是空的特征列
+                    median_val = 0
                 X_train[col] = X_train[col].fillna(median_val)
                 X_pred[col] = X_pred[col].fillna(median_val)
             else:
+                # UNION 之后同一列里可能同时有字符串和数字，LabelEncoder 要求类型一致，统一按文本编码
                 le = LabelEncoder()
-                combined = pd.concat([X_train[col], X_pred[col]])
-                le.fit(combined)
-                X_train[col] = le.transform(X_train[col])
-                X_pred[col] = le.transform(X_pred[col])
+                train_text = X_train[col].astype(str)
+                pred_text = X_pred[col].astype(str)
+                le.fit(pd.concat([train_text, pred_text]))
+                X_train[col] = le.transform(train_text)
+                X_pred[col] = le.transform(pred_text)
                 encoders[col] = le
 
         assert all(pd.api.types.is_numeric_dtype(X_train[col]) for col in X_train.columns)
 
-        model = RandomForestRegressor(n_estimators=100, random_state=42)
+        model = RandomForestRegressor(n_estimators=100, random_state=42, n_jobs=-1)
         model.fit(X_train, y_train)
         predicted_values = model.predict(X_pred)
         df.loc[df[target_col].isna(), target_col] = predicted_values
@@ -94,12 +153,16 @@ class EnhanceMainService:
             return
         if self._filler is None:
             self._filler = pipeline('fill-mask', model=resolve_data_path(config['bert_model_path']))
+            # 万一还是超长，从左边截断，保证句尾的 [MASK] 不会被截掉
+            self._filler.tokenizer.truncation_side = 'left'
         filler = self._filler
         null_indices = df[df[target_col].isnull()].index
-        non_null_texts = non_null.astype(str)
-        queries = [','.join(non_null_texts.sample(n=words_cnt, replace=True).tolist() + ['[MASK]']) for _ in
-                   range(len(null_indices))]
-        results = filler(queries)
+        # 长文本列（描述、摘要等）里的值很长，拼 16 个会远超 BERT 的 512 个 token，每个值只取前面一部分
+        non_null_texts = non_null.astype(str).str.slice(0, FILL_MASK_VALUE_CHARS)
+        rng = np.random.RandomState(0)  # 固定随机种子，同样的输入得到同样的结果
+        queries = [','.join(non_null_texts.sample(n=words_cnt, replace=True, random_state=rng).tolist() + ['[MASK]'])
+                   for _ in range(len(null_indices))]
+        results = filler(queries, tokenizer_kwargs={'truncation': True, 'max_length': 512})
         for idx, res in zip(null_indices, results):
             try:
                 filled = 'unknown'
@@ -128,52 +191,82 @@ class EnhanceMainService:
                 if flag == 'MODEL':
                     self.fill_numeric_value_with_model(df, column)
                 else:
-                    # AVERAGE / MEAN 都是用平均值填充
-                    df[column] = df[column].fillna(df[column].mean())
+                    # AVERAGE / MEAN 都是用平均值填充；整列都是空的（比如 JOIN 后一行都没连上的列）没有平均值，和 MODEL 一样填 0
+                    mean = df[column].mean()
+                    df[column] = df[column].fillna(0 if pd.isna(mean) else mean)
 
     # 总的执行增强函数
     def execute_enhance(self,k:int=8):
-        with enhance_lock:
-            self._execute_enhance(k)
-
-    def _execute_enhance(self,k:int=8):
         try:
             if self.enhance_paras is None:
                 raise Exception("增强参数不存在，无法执行增强")
             # 先取模型配置：没配置就直接报错，不用白白跑完耗时的向量化和检索
             llm_config = get_llm_config(self.username)
-            related_tables = self.query_tables(k)
-            related_tables_path = []
-            for table_id,score in related_tables:
-                select_sql = "SELECT * FROM table_base_info WHERE table_id=%s"
-                with Database() as db:
-                    sql_result = db.execute_query(select_sql, (int(table_id)+1,))
-                if len(sql_result) == 0:
-                    raise Exception(f'id 为 {table_id+1} 的相关表格查找不到')
-                related_tables_path.append(sql_result[0]['table_path'])
-
+            # 向量化和检索占用 GPU，串行执行
+            with enhance_lock:
+                related_tables_path = self.find_related_table_paths(k)
             query_table_info = self.read_csv_random_rows(os.path.join(self.enhance_case_path,'table.csv'))
             related_tables_info = [self.read_csv_random_rows(related_table_path) for related_table_path in related_tables_path]
+            # 等大模型返回可能要几分钟，不占 GPU，不持有锁
             table_enhance_strategy_LLM = TableEnhanceStrategyLLM(llm_config)
             enhance_strategy = table_enhance_strategy_LLM.ask(query_table_info,related_tables_info,self.enhance_paras)
             if not isinstance(enhance_strategy, dict) or not any(
                     isinstance(enhance_strategy.get(key), list) for key in ('join_operations', 'union_operations')):
                 raise Exception('模型没有返回有效的增强策略（缺少 join_operations / union_operations）。'
                                 '请检查模型配置，或换一个更强的模型；本地 Ollama 需要把上下文长度调大（OLLAMA_CONTEXT_LENGTH=16384）')
-            user_query_table_df = pd.read_csv(os.path.join(self.enhance_case_path,'table.csv'), na_values = ['.', 'NA'])
-            # related_table 1_index
-            # 先处理JOIN操作
-            # 大模型的输出不可信：每一个操作都单独校验、单独容错，一个操作有问题只跳过它，不影响其他操作
-            user_query_table_df = self.apply_join_operations(user_query_table_df, enhance_strategy.get('join_operations'), related_tables_path)
-            user_query_table_df = self.apply_union_operations(user_query_table_df, enhance_strategy.get('union_operations'), related_tables_path)
-
-            self.fill_vacancy_values(user_query_table_df,self.enhance_paras['fill'])
-            print(user_query_table_df)
-            # 保存表格
-            user_query_table_df.to_csv(os.path.join(self.enhance_case_path,'table.csv'),index=False)
+            with enhance_lock:
+                self.apply_strategy(enhance_strategy, related_tables_path)
         except Exception as e:
             error_log(f'执行增强操作失败：{self.username} {self.enhance_id}，失败原因：{e}')
             raise e
+
+    def find_related_table_paths(self, k: int) -> List[str]:
+        related_tables_path = []
+        for table_id, score in self.query_tables(k):
+            with Database() as db:
+                sql_result = db.execute_query("SELECT * FROM table_base_info WHERE table_id=%s", (int(table_id) + 1,))
+            if len(sql_result) == 0:
+                raise Exception(f'id 为 {table_id+1} 的相关表格查找不到')
+            related_tables_path.append(sql_result[0]['table_path'])
+        return related_tables_path
+
+    def apply_strategy(self, enhance_strategy: Dict, related_tables_path: List[str]) -> None:
+        """按大模型给出的策略增强用户表并保存"""
+        table_path = os.path.join(self.enhance_case_path, 'table.csv')
+        df = read_table_csv(table_path)
+        original_columns = list(df.columns)
+        # 增强方式：只要 JOIN 就不执行 UNION，反之亦然，不管大模型有没有多给
+        enhance_type = self.enhance_paras.get('type', 'BOTH')
+        join_operations = enhance_strategy.get('join_operations') if enhance_type in ('JOIN', 'BOTH') else []
+        union_operations = enhance_strategy.get('union_operations') if enhance_type in ('UNION', 'BOTH') else []
+        # related_table 1_index
+        # 先处理JOIN操作
+        # 大模型的输出不可信：每一个操作都单独校验、单独容错，一个操作有问题只跳过它，不影响其他操作
+        df = self.apply_join_operations(df, join_operations, related_tables_path)
+        df = self.apply_union_operations(df, union_operations, related_tables_path)
+        df = self.trim_columns(df, original_columns, self.enhance_paras.get('number'),
+                               self.enhance_paras.get('columns') or [])
+
+        self.fill_vacancy_values(df, self.enhance_paras['fill'])
+        # 保存表格：先写临时文件再替换，写到一半出错不会把用户的表格弄坏
+        temp_path = table_path + '.tmp'
+        df.to_csv(temp_path, index=False)
+        os.replace(temp_path, table_path)
+
+    @staticmethod
+    def trim_columns(df: pd.DataFrame, original_columns: List[str], number, focus_columns: List[str]) -> pd.DataFrame:
+        """
+        增强后的列数超过期望列数时，丢掉缺失最多的新增列。
+        用户原来的列和用户重点关注的列不会被丢弃，所以期望列数小于原表列数时不会删用户自己的列。
+        """
+        if not isinstance(number, int) or number <= 0 or df.shape[1] <= number:
+            return df
+        protected = set(original_columns) | set(focus_columns)
+        added = [c for c in df.columns if c not in protected]
+        # 缺失比例从高到低，同样缺失时后面的列先丢
+        order = sorted(range(len(added)), key=lambda i: (df[added[i]].isna().mean(), i), reverse=True)
+        drop = [added[i] for i in order[:df.shape[1] - number]]
+        return df.drop(columns=drop)
 
     @staticmethod
     def _is_str_list(value) -> bool:
@@ -189,18 +282,21 @@ class EnhanceMainService:
                 column_q = join_operation[0]
                 table_id, column_r = join_operation[1].split('.', 1)
                 table_id = int(table_id) - 1
-                keep_columns = list(set(join_operation[2:] + [column_r]))
+                keep_columns = list(dict.fromkeys(join_operation[2:] + [column_r]))  # 去重并保持顺序
                 if not 0 <= table_id < len(related_tables_path):
                     raise ValueError(f'相关表编号超出范围：{table_id + 1}')
                 if column_q not in df.columns:
                     raise ValueError(f'用户表中不存在列 {column_q}')
-                related_table_df = pd.read_csv(related_tables_path[table_id], na_values=['.', 'NA'], encoding_errors='replace')
+                related_table_df = read_table_csv(related_tables_path[table_id])
                 if column_r not in related_table_df.columns:
                     raise ValueError(f'相关表中不存在列 {column_r}')
-                related_table_df = related_table_df.filter(items=keep_columns).drop_duplicates(subset=[column_r])
-                df = pd.merge(df, related_table_df, left_on=column_q, right_on=column_r, how='left', suffixes=('', join_extra_flag))
+                # 空键不参与连接（pandas 会把空值和空值连在一起）；连接键统一成文本，数字列和文本列也能连接
+                right = related_table_df.filter(items=keep_columns).dropna(subset=[column_r])
+                right = right.assign(**{JOIN_KEY_COLUMN: join_key(right[column_r])}).drop_duplicates(subset=[JOIN_KEY_COLUMN])
+                left = df.assign(**{JOIN_KEY_COLUMN: join_key(df[column_q])})
+                df = left.merge(right, on=JOIN_KEY_COLUMN, how='left', suffixes=('', join_extra_flag))
                 # 对于 JOIN 结果中额外的列做删除
-                df = df.drop(columns=[col for col in df.columns if join_extra_flag in col])
+                df = df.drop(columns=[JOIN_KEY_COLUMN] + [col for col in df.columns if join_extra_flag in col])
             except Exception as e:
                 error_log(f'跳过无法执行的 JOIN 操作 {join_operation}：{e}')
         return df
@@ -219,98 +315,118 @@ class EnhanceMainService:
                     raise ValueError('UNION 操作必须成对给出两个字符串列表')
                 if len(operations) != len(column_names) or len(operations) == 0:
                     raise ValueError('UNION 操作的两个列表长度必须相同')
-                union_df = self.get_join_table_df(operations, column_names, related_tables_path)
-                if union_df is None:
-                    raise ValueError('UNION 操作引用了不存在的相关表')
                 df = df.loc[:, ~df.columns.duplicated(keep='first')].reset_index(drop=True)
+                union_df = self.get_join_table_df(operations, column_names, related_tables_path)
+                # 目标列名必须是增强到这一步的表里已经有的列；大模型给了不存在的名字就忽略那一列，而不是凭空多出一列
+                unknown = [c for c in union_df.columns if c not in df.columns]
+                if unknown:
+                    error_log(f'UNION 操作的目标列在表中不存在，已忽略：{unknown}')
+                union_df = union_df.drop(columns=unknown).dropna(how='all').drop_duplicates()
+                if union_df.shape[1] == 0 or len(union_df) == 0:
+                    raise ValueError('UNION 操作没有产生可以追加的行')
                 combined = pd.concat([df, union_df.reset_index(drop=True)], ignore_index=True)
-                # 只对新追加的行去重（重复的新行丢掉），用户原表里的行不动
+                # 只对新追加的行去重（和已有行重复的新行丢掉），用户原表里的行不动
                 is_new_row = combined.index >= len(df)
-                df = combined[~(is_new_row & combined.duplicated())]
+                new_rows = combined[is_new_row & ~combined.duplicated()]
+                if len(new_rows) > UNION_MAX_ROWS:
+                    new_rows = new_rows.sample(n=UNION_MAX_ROWS, random_state=0).sort_index()
+                df = pd.concat([combined[~is_new_row], new_rows], ignore_index=True)
             except Exception as e:
                 error_log(f'跳过无法执行的 UNION 操作 {operations}：{e}')
         return df
 
     def get_join_table_df(self,list_operations:List,list_column_names:List,table_paths:List):
-        def rename_and_filter_columns(df, column_mapping:Dict):
-            existing_columns = [col for col in df.columns if col in column_mapping]
-            df = df[existing_columns].rename(columns=column_mapping)
-            return df
-
-        # 就只有8个表格 1. 2. 3. 4.
-        table_had = list()
-        for index,operation in enumerate(list_operations):
-            if '+' in operation:
-                column_a , column_b = operation.split('+')
-                table_ida, table_column = column_a.split('.',1)
-                table_had.append(int(table_ida))
-                table_idb, table_column = column_b.split('.',1)
-                table_had.append(int(table_idb))
-            else:
-                table_id,table_column = operation.split('.',1)
-                table_had.append(int(table_id))
-        table_had = list(set(table_had))
-        # 相关表编号从 1 开始
-        if min(table_had) < 1 or max(table_had)>len(table_paths):
-            return None
-        join_map = [[] for _ in range(max(table_had) + 1)]
-        for operation in list_operations:
-            if '+' in operation:
-                column_a, column_b = operation.split('+')
-                table_ida, table_column = column_a.split('.', 1)
-                table_idb, table_column = column_b.split('.', 1)
-                table_ida = int(table_ida)
-                table_idb = int(table_idb)
-                join_map[table_idb].append(table_ida)
-                join_map[table_ida].append(table_idb)
-        for i in range(len(join_map)):
-            join_map[i] = list(set(join_map[i]))
-
-        tables_df = [None] * (max(table_had) + 1)
-        for have in table_had:
-            index = int(have)-1
-            tables_df[have] = pd.read_csv(table_paths[index], na_values = ['.', 'NA'])
-
-        for x in table_had:
-            change_name_dict = {}
-            for index,operation in enumerate(list_operations):
-                if '+' in operation:
-                    column_a, column_b = operation.split('+')
-                    table_ida, table_column1 = column_a.split('.', 1)
-                    table_idb, table_column2 = column_b.split('.', 1)
-                    table_ida = int(table_ida)
-                    table_idb = int(table_idb)
-                    if x == table_ida:
-                        change_name_dict[table_column1] = list_column_names[index]
-                    if x == table_idb:
-                        change_name_dict[table_column2] = list_column_names[index]
-                else:
-                    table_id, table_column = operation.split('.', 1)
-                    table_id = int(table_id)
-                    if x == table_id:
-                        change_name_dict[table_column] = list_column_names[index]
-            tables_df[x] =  tables_df[x].loc[:, ~ tables_df[x].columns.duplicated(keep='first')]
-            tables_df[x] = rename_and_filter_columns(tables_df[x],change_name_dict)
-
-        result = None
-        visited = [False] * (max(table_had)+1)
-        for x in table_had:
-            if visited[x]:
+        """
+        按 UNION 操作的描述拼出“和用户表做 UNION 的那张表”。
+        list_operations 里每一项是 '表号.列名'（单个相关表的一列），或 '表号.列名+表号.列名'（用两个相关表的这两列做连接，
+        连接后取前一列）；list_column_names 的第 i 项是第 i 列在结果里的名字。
+        用 '+' 连起来的相关表先按连接列依次 JOIN 成一张表（链式的 1+2、2+3 也能连起来）；
+        没有 '+' 相连的相关表各自独立，各自的行上下堆叠起来，而不是按行号横着硬拼。
+        """
+        # 解析：columns[i] = [(表号, 列名), ...]（第一项是取值的那一列），edges 是连接关系
+        entries, edges = [], []
+        for operation, name in zip(list_operations, list_column_names):
+            joined = _UNION_JOIN_REF.fullmatch(operation)
+            if joined:
+                ta, ca, tb, cb = int(joined.group(1)), joined.group(2).strip(), int(joined.group(3)), joined.group(4).strip()
+                if ta != tb:
+                    edges.append((ta, ca, tb, cb))
+                entries.append((ta, ca, name))
                 continue
-            visited[x] = True
-            if result is None:
-                result = tables_df[x]
-            else:
-                result = pd.concat([result, tables_df[x]], axis=1)
-            for y in join_map[x]:
-                if visited[y]:
-                    continue
-                visited[y] = True
-                result = pd.merge(result,tables_df[y])
-        if result is None:
-            raise Exception('部分表格 union 的结果出现 None')
-        result = result.loc[:, ~ result.columns.duplicated(keep='first')]
-        return result
+            single = _UNION_REF.fullmatch(operation)
+            if not single:
+                raise ValueError(f'无法解析 UNION 的列：{operation}')
+            entries.append((int(single.group(1)), single.group(2).strip(), name))
+
+        involved = sorted({t for t, _, _ in entries} | {t for e in edges for t in (e[0], e[2])})
+        # 相关表编号从 1 开始
+        if involved[0] < 1 or involved[-1] > len(table_paths):
+            raise ValueError('UNION 操作引用了不存在的相关表')
+
+        frames = {}
+        for table_id in involved:
+            frame = read_table_csv(table_paths[table_id - 1])
+            frames[table_id] = frame.loc[:, ~frame.columns.duplicated(keep='first')]
+
+        def prefixed(table_id):
+            return frames[table_id].add_prefix(f'{table_id}|')
+
+        # 用 '+' 把相关表连成若干连通块（并查集）
+        parent = {t: t for t in involved}
+
+        def find(x):
+            while parent[x] != x:
+                parent[x] = parent[parent[x]]
+                x = parent[x]
+            return x
+
+        for ta, _, tb, _ in edges:
+            parent[find(tb)] = find(ta)
+        components = {}
+        for table_id in involved:
+            components.setdefault(find(table_id), []).append(table_id)
+
+        stacked = []
+        for members in components.values():
+            member_set = set(members)
+            merged = prefixed(members[0])
+            joined_tables = {members[0]}
+            remaining = [e for e in edges if e[0] in member_set]
+            # 每次找一条一端已经连进来、另一端还没连进来的边，把另一张表 JOIN 进来
+            progress = True
+            while progress:
+                progress = False
+                for ta, ca, tb, cb in remaining:
+                    if (ta in joined_tables) == (tb in joined_tables):
+                        continue
+                    if tb in joined_tables:  # 统一成 ta 已连入
+                        ta, ca, tb, cb = tb, cb, ta, ca
+                    left_key, right_key = f'{ta}|{ca}', f'{tb}|{cb}'
+                    right = prefixed(tb)
+                    if left_key not in merged.columns or right_key not in right.columns:
+                        raise ValueError(f'连接列不存在：{ta}.{ca} + {tb}.{cb}')
+                    right = right.dropna(subset=[right_key])
+                    right = right.assign(**{JOIN_KEY_COLUMN: join_key(right[right_key])}).drop_duplicates(subset=[JOIN_KEY_COLUMN])
+                    merged = merged.assign(**{JOIN_KEY_COLUMN: join_key(merged[left_key])}).merge(
+                        right, on=JOIN_KEY_COLUMN, how='inner').drop(columns=[JOIN_KEY_COLUMN])
+                    joined_tables.add(tb)
+                    progress = True
+            if joined_tables != member_set:
+                raise ValueError('UNION 操作中相关表之间的连接关系无法连通')
+
+            columns = {}
+            for table_id, column, name in entries:
+                if table_id in member_set and name not in columns:
+                    if f'{table_id}|{column}' not in merged.columns:
+                        error_log(f'UNION 引用的列在相关表 {table_id} 中不存在，已忽略：{column}')
+                        continue
+                    columns[name] = merged[f'{table_id}|{column}']
+            if columns:
+                stacked.append(pd.DataFrame(columns))
+
+        if not stacked:
+            raise ValueError('UNION 操作引用的列在相关表中都不存在')
+        return pd.concat(stacked, ignore_index=True)
 
     def trans_table_list_to_json(self,table_list, columns=None):
         cols = table_list[0]
@@ -366,13 +482,23 @@ class EnhanceMainService:
             raise e
 
     def read_csv_random_rows(self, table_path, max_rows=10):
-        # 读取CSV文件并提取数据
-        with open(table_path, 'r', encoding='utf-8') as file:
+        # 读取CSV文件并提取数据，作为样本发给大模型：宽表、长文本会撑爆上下文，所以限制列数并截断单元格
+        with open(table_path, 'r', encoding='utf-8', errors='replace', newline='') as file:
             reader = csv.reader(file)
-            headers = next(reader)
+            headers = next(reader, None)
+            if headers is None:
+                raise ValueError(f'表格文件是空的：{os.path.basename(table_path)}')
             data_rows = list(reader)
         selected_rows = random.sample(data_rows,k=min(max_rows, len(data_rows)))
-        result = [headers] + selected_rows
+
+        def shorten(cell: str) -> str:
+            return cell if len(cell) <= SAMPLE_CELL_CHARS else cell[:SAMPLE_CELL_CHARS] + '…'
+
+        n_columns = min(len(headers), SAMPLE_MAX_COLUMNS)
+        result = [[shorten(h) for h in headers[:n_columns]]]
+        for row in selected_rows:
+            row = row[:n_columns] + [''] * (n_columns - len(row))  # 有的行列数不够，补齐
+            result.append([shorten(cell) for cell in row])
         return result
 
     # 先处理表格的 embedding

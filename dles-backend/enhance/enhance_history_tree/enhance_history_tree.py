@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 import json
 import os
+import functools
 import shutil
+import threading
 import time
 from pathlib import Path
 
@@ -13,6 +15,17 @@ from logs.log import error_log
 from utils.upload import safe_filename, save_upload
 
 CSV_MAX_BYTES = 50 * 1024 * 1024
+
+# 修改历史记录树都是“读出整棵树 → 改 → 写回”，并发时后写的会覆盖先写的，新节点的编号也会重复，所以串行执行
+_tree_lock = threading.Lock()
+
+
+def _serialized(method):
+    @functools.wraps(method)
+    def wrapper(*args, **kwargs):
+        with _tree_lock:
+            return method(*args, **kwargs)
+    return wrapper
 
 
 class EnhanceHistoryTree:
@@ -92,6 +105,7 @@ class EnhanceHistoryTree:
         for child in current_history_tree.children:
             self.insert_node_into_history_tree(fa_node_id, child, node)
 
+    @_serialized
     def add_folder(self,fa_node_id: int, node_name: str):
         node_name = node_name.strip()
         if not self.is_valid_filename(node_name):
@@ -116,6 +130,7 @@ class EnhanceHistoryTree:
             error_log(f'历史记录树新增节点失败，原因: {e}')
             raise e
 
+    @_serialized
     def add_file(self,fa_node_id: int, csv_file: UploadFile):
         file_name = safe_filename(csv_file.filename)
         if not file_name.lower().endswith(".csv"):
@@ -165,6 +180,7 @@ class EnhanceHistoryTree:
             self.change_folder_name_dfs(node_id, child, new_node_name)
 
 
+    @_serialized
     def change_folder_name(self, node_id:int,new_node_name:str):
         new_node_name = new_node_name.strip()
         if not self.is_valid_filename(new_node_name):
@@ -200,6 +216,7 @@ class EnhanceHistoryTree:
         for child in current_history_tree.children:
             self.delete_folder_dfs(delete_ids, child, new_path, paths_to_remove)
 
+    @_serialized
     def delete_folders(self, delete_ids: list):
         try:
             tree = self.get_user_tree()

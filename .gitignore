@@ -44,3 +44,6 @@ dist-ssr/
 
 # downloaded benchmark archives
 /_downloads/
+
+# Runtime pid files written by start.ps1
+/.run/

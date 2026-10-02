@@ -63,6 +63,8 @@ The embedding model replaces the thesis' Jina v2: it is stronger, needs no remot
 
 ### 4. Run
 
+On Windows, once steps 1–3 are done, double-click `start.bat` (or run `.\start.ps1`): it starts the `dles-mysql` container, the backend (`:8080`) and the frontend (`:5173`), waits until each answers, and opens the browser. `stop.bat` stops the backend and frontend (`stop.ps1 -Db` also stops MySQL). Create a user once with `scripts.create_user` (below). To start things by hand:
+
 ```bash
 python -m scripts.create_user you@example.com           # creates a user without the e-mail verification code
 python main.py                                          # API on http://localhost:8080, docs at /docs

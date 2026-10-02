@@ -18,14 +18,19 @@ config = read_config(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'c
 
 
 class Transformer:
+    # 模型只加载一次
+    _model = None
+
     def __init__(self, use_model = True):
         self.model_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),config['model_path'])
         self.pure_embedding_path = config['pure_embedding_path']
         self.processed_embedding_path = config['processed_embedding_path']
         # 加载模型
         if use_model:
-            self.model = torch.load(self.model_path,weights_only=False)
-            self.model.eval()
+            if Transformer._model is None:
+                Transformer._model = torch.load(self.model_path,weights_only=False)
+                Transformer._model.eval()
+            self.model = Transformer._model
         else:
             self.model = None
         # 这里永远不能把这个参数设置成为 True，因为 transformer 不应该承担任何 embedding 的工作
@@ -34,8 +39,9 @@ class Transformer:
 
     def get_processed_embedding(self,embedding:np.ndarray)->np.ndarray:
         embedding =  torch.from_numpy(embedding).to(self.device).float()
-        embedding = self.model(embedding)
-        return embedding.cpu().detach().numpy()
+        with torch.no_grad():
+            embedding = self.model(embedding)
+        return embedding.cpu().numpy()
 
     def process_and_save_embedding(self,path_before:str,path_after:str):
         embedding_before = self.jina_embedding.read_embeddings(path_before)
@@ -53,10 +59,9 @@ class Transformer:
                     self.process_and_save_embedding(filename,save_name)
                     filename = Path(filename).as_posix()
                     save_name = Path(save_name).as_posix()
-                    db = Database()
-                    sql = "UPDATE table_base_info SET processed_embedding_path = %s WHERE pure_embedding_path = %s;"
-                    db.execute_update(sql, (save_name, filename))
-                    db.close()
+                    with Database() as db:
+                        sql = "UPDATE table_base_info SET processed_embedding_path = %s WHERE pure_embedding_path = %s;"
+                        db.execute_update(sql, (save_name, filename))
                     print(f'成功转化表格：{filename}')
                 except Exception as e:
                     error_log(f'转化表格错误: {filename},{e}')

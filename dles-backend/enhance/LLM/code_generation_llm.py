@@ -14,7 +14,7 @@ class CodeGenerationLLM:
     def ask(self,user_code:str,user_require:str):
         user_input = user_require
         if user_code.strip() != "":
-            user_input += f"这是我的代码：\n{user_code}"
+            user_input += f"\n这是我的代码：\n{user_code}"
         result = self.qwen.ask_one(self.prompt,user_input,False)[0]
         result_list = result.split("\n")
         result_list = [line for line in result_list if '```' not in line]

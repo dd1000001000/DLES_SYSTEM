@@ -8,6 +8,7 @@ from pathlib import Path
 import string
 import numpy as np
 import pandas as pd
+import torch
 from transformers import AutoModel, AutoTokenizer
 from tqdm import tqdm
 from database.database import Database
@@ -17,18 +18,25 @@ from utils.read_config.read_config import read_config
 
 config = read_config(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json'))
 model_path = config['model_path']
-device = 'cuda'
+device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
 class JinaEmbedding:
     # 静态变量
     words_IDF = None
+    # 模型和分词器只加载一次，避免每次请求都重新载入显存
+    _model = None
+    _tokenizer = None
+
     def __init__(self,use_embedding=True):
         self.max_token_length = config['max_token_length']
         self.pure_table_path = config['pure_table_path']
         self.pure_embedding_path = config['pure_embedding_path']
         if use_embedding:
-            self.model = AutoModel.from_pretrained(model_path, trust_remote_code=True).to(device)
-            self.tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+            if JinaEmbedding._model is None:
+                JinaEmbedding._model = AutoModel.from_pretrained(model_path, trust_remote_code=True).to(device)
+                JinaEmbedding._tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+            self.model = JinaEmbedding._model
+            self.tokenizer = JinaEmbedding._tokenizer
             if JinaEmbedding.words_IDF is None:
                 JinaEmbedding.words_IDF = self._get_IDF()
         else:
@@ -134,7 +142,6 @@ class JinaEmbedding:
         for text in texts:
             input_ids = self.tokenizer.encode(text)
             tokens_len = len(input_ids)
-            assert tokens_len<=self.max_token_length
             if tokens_len<=self.max_token_length:
                 embedding = self.model.encode([text],device=device)
                 embeddings.append(embedding[0])
@@ -152,7 +159,7 @@ class JinaEmbedding:
                             embedding+=one_embedding
                         text_list.clear()
                 # 直接取平均值
-                embedding//=divisor
+                embedding/=divisor
                 embeddings.append(embedding)
 
         return embeddings
@@ -180,10 +187,9 @@ class JinaEmbedding:
                     save_name = self.embedding_one(filename,self.pure_embedding_path)
                     filename = Path(filename).as_posix()
                     save_name = Path(save_name).as_posix()
-                    db=Database()
-                    sql = "INSERT INTO table_base_info (table_path, pure_embedding_path) VALUES (%s, %s);"
-                    db.execute_update(sql, (filename, save_name))
-                    db.close()
+                    with Database() as db:
+                        sql = "INSERT INTO table_base_info (table_path, pure_embedding_path) VALUES (%s, %s);"
+                        db.execute_update(sql, (filename, save_name))
                     print(f'成功向量化表格: {filename}')
                 except Exception as e:
                     error_log(f'初始化表格向量错误: {filename},{e}')

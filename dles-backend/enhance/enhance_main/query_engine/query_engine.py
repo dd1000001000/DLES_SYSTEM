@@ -1,4 +1,5 @@
 import random
+import threading
 import time
 
 import numpy as np
@@ -14,20 +15,26 @@ from enhance.enhance_main.query_engine.engine_utils.graph2 import Graph2
 class QueryEngine:
     # 静态变量
     graph = None
+    _build_lock = threading.Lock()
+
     def __init__(self):
         if QueryEngine.graph is None:
-            self.build_graph()
+            with QueryEngine._build_lock:
+                if QueryEngine.graph is None:
+                    self.build_graph()
 
 
     def load_embeddings(self):
-        db = Database()
-        sql = 'SELECT * FROM table_base_info;'
-        tables_info = db.execute_query(sql)
-        db.close()
+        with Database() as db:
+            sql = 'SELECT * FROM table_base_info;'
+            tables_info = db.execute_query(sql)
         tables = [None] * len(tables_info)
         jina = JinaEmbedding(False)
         for table_info in tables_info:
             save_path = table_info['processed_embedding_path']
+            if save_path is None or not 1 <= table_info['table_id'] <= len(tables_info):
+                raise Exception(f"table_base_info 数据不完整（table_id={table_info['table_id']}），"
+                                "table_id 必须从 1 开始连续，且每张表都要有 processed_embedding_path")
             embedding = jina.read_embeddings(save_path)
             tables[table_info['table_id'] - 1] = embedding
         return tables

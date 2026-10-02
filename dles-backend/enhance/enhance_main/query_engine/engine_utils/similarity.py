@@ -16,8 +16,8 @@ class Similarity:
 
     def cosine_similarity_matrix(self, table1: np.ndarray, table2: np.ndarray):
         # 计算 L2 范数，避免除零
-        norm1 = np.linalg.norm(table1, axis=1, keepdims=True)  # (m1, 1)
-        norm2 = np.linalg.norm(table2, axis=1, keepdims=True)  # (m2, 1)
+        norm1 = np.maximum(np.linalg.norm(table1, axis=1, keepdims=True), 1e-12)  # (m1, 1)
+        norm2 = np.maximum(np.linalg.norm(table2, axis=1, keepdims=True), 1e-12)  # (m2, 1)
         # 计算余弦相似度
         similarity_matrix = np.dot(table1, table2.T) / (norm1 @ norm2.T)
         similarity_matrix[similarity_matrix < self.threshold] = 1e-9

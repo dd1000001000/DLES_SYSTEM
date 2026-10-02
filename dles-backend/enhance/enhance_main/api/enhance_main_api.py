@@ -7,13 +7,14 @@ from starlette.responses import JSONResponse
 # 强制导入，禁止删除
 from transformer.model import TableContrastiveModel, TransformerEncoder
 from enhance.enhance_main.service.enhance_main_service import EnhanceMainService
-from utils.authorization.authorization import get_current_user
+from utils.authorization.authorization import get_current_user, ensure_same_user
 from utils.authorization.models import User
 
 enhance_main_router = APIRouter()
 
 @enhance_main_router.post('/{username}/{enhance_id}')
-async def enhance_main_process(username:str,enhance_id:int,dialogues:List[Dict],current_user: Annotated[User, Depends(get_current_user)]):
+def enhance_main_process(username:str,enhance_id:int,dialogues:List[Dict],current_user: Annotated[User, Depends(get_current_user)]):
+    ensure_same_user(username, current_user)
     try:
         start_enhance_word = "开始增强"
         last_dialogue = dialogues[-1]

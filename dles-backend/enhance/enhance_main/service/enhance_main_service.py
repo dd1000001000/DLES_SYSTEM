@@ -6,6 +6,7 @@ import os
 import random
 import shutil
 import string
+import threading
 from typing import List, Dict
 
 import pandas as pd
@@ -27,6 +28,9 @@ from utils.read_config.read_config import read_config
 
 config = read_config(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json'))
 
+# 增强过程会占用 GPU 并写用例文件，串行执行；接口是同步函数，会在线程池中运行，不会阻塞其他请求
+enhance_lock = threading.Lock()
+
 # 这个类会锁定一个用例
 class EnhanceMainService:
     def __init__(self,username:str,enhance_id:int):
@@ -35,6 +39,7 @@ class EnhanceMainService:
         self.history_folder_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../../enhance_history')
         self.enhance_case_path = os.path.abspath(os.path.join(self.history_folder_path,self.get_case_path()))
         self.enhance_paras = None
+        self._filler = None
 
     def convert_to_numeric_if_possible(self, df: pd.DataFrame, column_name: str) -> None:
         # 尝试转换整个列为数字（无效值转为 NaN）
@@ -66,8 +71,8 @@ class EnhanceMainService:
         for col in X_train.columns:
             if pd.api.types.is_numeric_dtype(X_train[col]):
                 median_val = X_train[col].median()
-                X_train[col].fillna(median_val, inplace=True)
-                X_pred[col].fillna(median_val, inplace=True)
+                X_train[col] = X_train[col].fillna(median_val)
+                X_pred[col] = X_pred[col].fillna(median_val)
             else:
                 le = LabelEncoder()
                 combined = pd.concat([X_train[col], X_pred[col]])
@@ -86,9 +91,11 @@ class EnhanceMainService:
     def fill_text_value(self,df: pd.DataFrame, target_col: str, words_cnt:int = 16) -> None:
         non_null = df[target_col].dropna()
         if len(non_null) == 0:
-            df[target_col].fillna("unknown", inplace=True)
+            df[target_col] = df[target_col].fillna("unknown")
             return
-        filler = pipeline('fill-mask', model=config['bert_model_path'])
+        if self._filler is None:
+            self._filler = pipeline('fill-mask', model=config['bert_model_path'])
+        filler = self._filler
         null_indices = df[df[target_col].isnull()].index
         non_null_texts = non_null.astype(str)
         queries = [','.join(non_null_texts.sample(n=words_cnt, replace=True).tolist() + ['[MASK]']) for _ in
@@ -97,9 +104,11 @@ class EnhanceMainService:
         for idx, res in zip(null_indices, results):
             try:
                 filled = 'unknown'
+                # 结果按得分从高到低排列，取第一个不是标点的候选词
                 for r in res:
                     if r['token_str'] not in string.punctuation:
                         filled = r['token_str']
+                        break
                 df.at[idx, target_col] = filled
             except (KeyError, IndexError):
                 df.at[idx, target_col] = 'unknown'
@@ -119,15 +128,16 @@ class EnhanceMainService:
             if pd.api.types.is_numeric_dtype(df[column]):
                 if flag == 'MODEL':
                     self.fill_numeric_value_with_model(df, column)
-                elif flag == 'MEAN':
-                    mode_val = df[column].mode()[0]
-                    df[column].fillna(mode_val, inplace=True)
                 else:
-                    median_val = df[column].median()
-                    df[column].fillna(median_val, inplace=True)
+                    # AVERAGE / MEAN 都是用平均值填充
+                    df[column] = df[column].fillna(df[column].mean())
 
     # 总的执行增强函数
     def execute_enhance(self,k:int=8):
+        with enhance_lock:
+            self._execute_enhance(k)
+
+    def _execute_enhance(self,k:int=8):
         try:
             if self.enhance_paras is None:
                 raise Exception("增强参数不存在，无法执行增强")
@@ -135,9 +145,8 @@ class EnhanceMainService:
             related_tables_path = []
             for table_id,score in related_tables:
                 select_sql = "SELECT * FROM table_base_info WHERE table_id=%s"
-                db=Database()
-                sql_result = db.execute_query(select_sql, (int(table_id)+1,))
-                db.close()
+                with Database() as db:
+                    sql_result = db.execute_query(select_sql, (int(table_id)+1,))
                 if len(sql_result) == 0:
                     raise Exception(f'id 为 {table_id+1} 的相关表格查找不到')
                 related_tables_path.append(sql_result[0]['table_path'])
@@ -150,17 +159,25 @@ class EnhanceMainService:
             # related_table 1_index
             # 先处理JOIN操作
             join_extra_flag = "_eCnIIm7B0TvO"
-            join_operations = enhance_strategy['join_operations']
+            # 大模型的输出不可信，缺少字段或格式不对的操作直接跳过
+            join_operations = enhance_strategy.get('join_operations', [])
             for join_operation in join_operations:
                 if len(join_operation) < 3:
                     error_log(f'JOIN 操作的信息小于 3 列，无法执行：{str(join_operation)}')
                     continue
                 column_q = join_operation[0]
-                table_id, column_r = join_operation[1].split('.', 1)
+                try:
+                    table_id, column_r = join_operation[1].split('.', 1)
+                    table_id = int(table_id) - 1
+                except ValueError:
+                    error_log(f'JOIN 操作格式错误，无法执行：{str(join_operation)}')
+                    continue
                 keep_columns = list(set(join_operation[2:] + [column_r]))
-                table_id = int(table_id) - 1
-                if table_id < len(related_tables_path):
+                if 0 <= table_id < len(related_tables_path) and column_q in user_query_table_df.columns:
                     related_table_df = pd.read_csv(related_tables_path[table_id],na_values = ['.', 'NA'])
+                    if column_r not in related_table_df.columns:
+                        error_log(f'JOIN 操作的相关表中不存在列 {column_r}')
+                        continue
                     related_table_df = related_table_df.filter(items=keep_columns)
                     related_table_df = related_table_df.drop_duplicates(subset=[column_r])
                     user_query_table_df = pd.merge(user_query_table_df,related_table_df,left_on=column_q,right_on=column_r,how='outer',suffixes=('', join_extra_flag))
@@ -168,7 +185,7 @@ class EnhanceMainService:
                     drop_cols = [col for col in user_query_table_df.columns if "_eCnIIm7B0TvO" in col]
                     user_query_table_df = user_query_table_df.drop(columns=drop_cols)
             # 再处理union操作
-            union_operations = enhance_strategy['union_operations']
+            union_operations = enhance_strategy.get('union_operations', [])
             if len(union_operations)%2 == 1:
                 error_log(f'联合操作的列表长度为奇数')
                 union_operations.pop()
@@ -181,7 +198,11 @@ class EnhanceMainService:
                 if len(operations)!=len(column_names):
                     error_log(f'union 操作的操作长度不一致')
                     continue
-                union_df = self.get_join_table_df(operations,column_names,related_tables_path)
+                try:
+                    union_df = self.get_join_table_df(operations,column_names,related_tables_path)
+                except (ValueError, IndexError, KeyError) as e:
+                    error_log(f'union 操作格式错误，无法执行：{operations}，原因：{e}')
+                    continue
                 if union_df is None:
                     continue
                 user_query_table_df = user_query_table_df.loc[:, ~ user_query_table_df.columns.duplicated(keep='first')]
@@ -216,7 +237,8 @@ class EnhanceMainService:
                 table_id,table_column = operation.split('.',1)
                 table_had.append(int(table_id))
         table_had = list(set(table_had))
-        if max(table_had)>len(table_paths):
+        # 相关表编号从 1 开始
+        if min(table_had) < 1 or max(table_had)>len(table_paths):
             return None
         join_map = [[] for _ in range(max(table_had) + 1)]
         for operation in list_operations:
@@ -383,6 +405,3 @@ class EnhanceMainService:
                 return one_history["content"]
         return None
 
-
-if __name__ == '__main__':
-    obj = EnhanceMainService("1228280263@qq.com",2)

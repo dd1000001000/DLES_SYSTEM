@@ -14,11 +14,13 @@ class DSU:
         self.parent = list(range(size))  # 父节点数组
 
     def find(self, x):
-        if x==self.parent[x]:
-            return x
-        else:
-            self.parent[x] = self.find(self.parent[x])
-            return self.parent[x]
+        # 迭代实现，避免链很长时递归超出 Python 的递归深度
+        root = x
+        while self.parent[root] != root:
+            root = self.parent[root]
+        while self.parent[x] != root:
+            self.parent[x], x = root, self.parent[x]
+        return root
 
     def union(self, x, y):
         x_root = self.find(x)
@@ -32,6 +34,8 @@ class Graph2:
     def __init__(self,  tables: List[NDArray], max_layers = 5,edge_short = 0.145,edge_long = 0.005):
         self.tables = tables
         self.n = len(self.tables)
+        if self.n < 2:
+            raise ValueError('数据湖中至少需要 2 张表格才能构建检索图')
         self.ml = 1.0 / math.log(self.n)
         self.max_layers = max_layers
         self.edge_short = edge_short
@@ -130,6 +134,9 @@ class Graph2:
                     if distance[v] < min_dis:
                         min_dis = distance[v]
                         next_node = v
+                if next_node == -1:
+                    # 当前节点在这一层没有邻居，无路可走
+                    break
                 current_node = next_node
                 steps -= 1
 

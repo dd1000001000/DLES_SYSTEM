@@ -1,12 +1,12 @@
 # -*- coding: utf-8 -*-
-import random
+import secrets
 import smtplib
 import string
 from email.mime.text import MIMEText
 
 from logs.log import error_log, info_log
 from utils.read_config.read_config import get_env
-from utils.verify_code.verify_code import add_or_update_verify_code
+from utils.verify_code.verify_code import add_or_update_verify_code, can_send_verify_code
 
 my_sender = get_env('DLES_MAIL_SENDER')
 token = get_env('DLES_MAIL_TOKEN')
@@ -30,10 +30,12 @@ def mail(title: str, text: str, receiver: str) -> bool:
 
 def getcode(length=8) -> str:
     characters = string.ascii_lowercase + string.digits  # 小写字母 + 数字
-    return ''.join(random.choices(characters, k=length))
+    return ''.join(secrets.choice(characters) for _ in range(length))
 
 
 def send_verifycode(receiver: str, send_type: str) -> bool:
+    if not can_send_verify_code(receiver):
+        raise Exception('验证码发送过于频繁，请 60 秒后再试')
     verifycode = getcode()
     title = '基于数据湖的表格增强系统验证码'
     text = f'您的邮箱验证码是 {verifycode}，请使用此验证码来' + ('注册账号。' if send_type == 'register' else '修改密码。')

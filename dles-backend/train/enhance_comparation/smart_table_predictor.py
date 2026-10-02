@@ -4,17 +4,33 @@ import numpy as np
 import pandas as pd
 from sklearn.base import BaseEstimator
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.model_selection import train_test_split
 from sklearn.multioutput import MultiOutputRegressor
+from sklearn.preprocessing import LabelEncoder
 
 
 class SmartTablePredictor(BaseEstimator):
-    def __init__(self, text_features_max=100, target_text_keywords=50):
+    """
+    预测表格中的某一列。特征列里的数值列直接使用，文本列做 TF-IDF。
+
+    目标列是数值：LightGBM 回归，输出数值。
+    目标列是文本：输出的一定是目标列里出现过的完整取值（而不是单个关键词），这样才能和真实值逐条比较。
+      - 取值种类不多（<= max_classes，例如国家、类别）：当作分类问题，LightGBM 分类器直接预测取值。
+      - 取值种类很多（例如名称、描述）：先回归出目标文本的 TF-IDF 向量，
+        再在训练集出现过的取值里找余弦相似度最高的那一个作为预测结果。
+    """
+
+    def __init__(self, text_features_max=100, target_text_keywords=50, max_classes=30):
         self.text_features_max = text_features_max
         self.target_text_keywords = target_text_keywords
+        self.max_classes = max_classes
         self.is_text_target = None
+        self.target_mode = None  # 'classify' | 'retrieve' | 'constant'
         self.text_vectorizers = {}
         self.target_vectorizer = None
+        self.label_encoder = None
+        self.constant_label = None
+        self.candidate_labels = None
+        self.candidate_vectors = None
         self.model = None
         self.feature_order = []
         self.feature_names = []
@@ -39,8 +55,9 @@ class SmartTablePredictor(BaseEstimator):
                 return original_series
         return series
 
-    def _detect_type(self, y):
-        return isinstance(y.iloc[0], str) if hasattr(y, 'iloc') else isinstance(y[0], str)
+    @staticmethod
+    def _detect_type(y):
+        return not pd.api.types.is_numeric_dtype(y)
 
     def _fit_features(self, X):
         numeric_cols = X.select_dtypes(include=np.number).columns.tolist()
@@ -49,28 +66,20 @@ class SmartTablePredictor(BaseEstimator):
 
         numeric_features = X[numeric_cols].values if numeric_cols else np.zeros((len(X), 0))
 
-        numeric_feature_names = numeric_cols.copy()
-
         text_features_list = []
-        text_feature_names = []
         for col in text_cols:
             vec = TfidfVectorizer(max_features=self.text_features_max)
+            try:
+                transformed = vec.fit_transform(X[col].astype(str)).toarray()
+            except ValueError:
+                # 整列都是停用词/标点，词表为空，这一列没有可用信息
+                continue
             self.text_vectorizers[col] = vec
-            transformed = vec.fit_transform(X[col].astype(str)).toarray()
             text_features_list.append(transformed)
 
-            if self.text_features_max == 1:
-                text_feature_names.append(f"{col}_{vec.get_feature_names_out()[0]}")
-            else:
-                text_feature_names.extend([f"{col}_{word}" for word in vec.get_feature_names_out()])
-
         if text_features_list:
-            text_features = np.hstack(text_features_list)
-            self.feature_names = numeric_feature_names + text_feature_names
-            return np.hstack([numeric_features, text_features])
-        else:
-            self.feature_names = numeric_feature_names
-            return numeric_features
+            return np.hstack([numeric_features] + text_features_list).astype(float)
+        return numeric_features.astype(float)
 
     def _transform_features(self, X):
         numeric_cols = [col for col in self.feature_order if col in X.select_dtypes(include=np.number).columns]
@@ -82,63 +91,78 @@ class SmartTablePredictor(BaseEstimator):
         for col in text_cols:
             vec = self.text_vectorizers.get(col)
             if vec:
-                transformed = vec.transform(X[col].astype(str)).toarray()
-                text_features_list.append(transformed)
+                text_features_list.append(vec.transform(X[col].astype(str)).toarray())
 
         if text_features_list:
-            text_features = np.hstack(text_features_list)
-            return np.hstack([numeric_features, text_features])
-        else:
-            return numeric_features
+            return np.hstack([numeric_features] + text_features_list).astype(float)
+        return numeric_features.astype(float)
 
-    def _process_text_target(self, y):
+    @staticmethod
+    def _to_frame(matrix):
+        # LightGBM 不允许特征名里有 JSON 特殊字符，而列名/词语里什么都可能出现，所以统一用编号命名
+        return pd.DataFrame(matrix, columns=[f'f{i}' for i in range(matrix.shape[1])])
+
+    def _fit_text_target(self, X_frame, y):
+        y_text = y.astype(str).reset_index(drop=True)
+        labels = sorted(y_text.unique())
+
+        if len(labels) == 1:
+            self.target_mode = 'constant'
+            self.constant_label = labels[0]
+            return
+
+        if len(labels) <= self.max_classes:
+            self.target_mode = 'classify'
+            self.label_encoder = LabelEncoder().fit(y_text)
+            self.model = lgb.LGBMClassifier(verbose=-1)
+            self.model.fit(X_frame, self.label_encoder.transform(y_text))
+            return
+
+        self.target_mode = 'retrieve'
         self.target_vectorizer = TfidfVectorizer(max_features=self.target_text_keywords)
-        return self.target_vectorizer.fit_transform(y).toarray()
+        try:
+            y_vectors = self.target_vectorizer.fit_transform(y_text).toarray()
+        except ValueError:
+            # 目标文本里提取不出任何词，退化为总是预测出现最多的取值
+            self.target_mode = 'constant'
+            self.constant_label = y_text.value_counts().idxmax()
+            return
+        self.candidate_labels = np.array(labels)
+        self.candidate_vectors = self.target_vectorizer.transform(self.candidate_labels).toarray()
+        self.model = MultiOutputRegressor(lgb.LGBMRegressor(verbose=-1))
+        self.model.fit(X_frame, y_vectors)
 
     def fit(self, X, y):
+        X = X.copy()
         for col in X.columns:
             X[col] = self.try_convert_to_numeric(X[col])
         y = self.try_convert_to_numeric(y)
         self.is_text_target = self._detect_type(y)
-        X_processed = self._fit_features(X)
+        X_frame = self._to_frame(self._fit_features(X))
 
         if self.is_text_target:
-            y_processed = self._process_text_target(y)
-            self.model = MultiOutputRegressor(lgb.LGBMRegressor())
+            self._fit_text_target(X_frame, y)
         else:
-            y_processed = y
-            self.model = lgb.LGBMRegressor()
-
-        if len(self.feature_names) == X_processed.shape[1]:
-            X_processed = pd.DataFrame(X_processed, columns=self.feature_names)
-
-        self.model.fit(X_processed, y_processed)
+            self.target_mode = 'regress'
+            self.model = lgb.LGBMRegressor(verbose=-1)
+            self.model.fit(X_frame, y)
         return self
 
     def predict(self, X):
-        X_processed = self._transform_features(X)
+        X = X.copy()
+        for col in X.columns:
+            X[col] = self.try_convert_to_numeric(X[col])
+        X_frame = self._to_frame(self._transform_features(X))
 
-        if len(self.feature_names) == X_processed.shape[1]:
-            X_processed = pd.DataFrame(X_processed, columns=self.feature_names)
+        if not self.is_text_target:
+            return self.model.predict(X_frame)
+        if self.target_mode == 'constant':
+            return [self.constant_label] * len(X_frame)
+        if self.target_mode == 'classify':
+            return list(self.label_encoder.inverse_transform(self.model.predict(X_frame)))
 
-        if self.is_text_target:
-            pred = self.model.predict(X_processed)
-            keywords = self.target_vectorizer.get_feature_names_out()
-            return [keywords[row.argmax()] for row in pred]
-        else:
-            return self.model.predict(X_processed)
-
-
-# 示例使用
-if __name__ == "__main__":
-    predict_column = "Amount"
-    df = pd.read_csv("E:/DLES_System/dles-backend/train/temp_csv_files/84d8c4cd-353c-4cf5-9e10-c487a4d9ac28/01_April_28201829.csv")
-    X = df.drop(columns=[predict_column])
-    y = df[predict_column]
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2)
-    print("=== 数值预测 ===")
-    model = SmartTablePredictor()
-    model.fit(X_train, y_train)
-    print(model.predict(X_test))
-
-
+        predicted_vectors = self.model.predict(X_frame)
+        norm_pred = np.maximum(np.linalg.norm(predicted_vectors, axis=1, keepdims=True), 1e-12)
+        norm_cand = np.maximum(np.linalg.norm(self.candidate_vectors, axis=1, keepdims=True), 1e-12)
+        similarity = (predicted_vectors / norm_pred) @ (self.candidate_vectors / norm_cand).T
+        return list(self.candidate_labels[similarity.argmax(axis=1)])

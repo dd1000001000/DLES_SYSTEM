@@ -1,8 +1,5 @@
-import { ElMessage } from "element-plus";
 import $http from "../../util/request";
 import type { addForm, changeForm } from "../type/enhance-history-tree-type";
-import { useUserInofStore } from "../../init-page/store/userInfo";
-import axios from "axios";
 import type { Dialogue } from "../type/enhance-dialouge-type";
 import { v4 as uuidv4 } from "uuid";
 
@@ -58,25 +55,14 @@ export const initCase = async (
   faNodeId: number,
   csvFile: File,
 ) => {
-  try {
-    const userStore = useUserInofStore();
-    const jwtToken = localStorage.getItem(userStore.getStorageName);
-    const formData = new FormData();
-    formData.append("csvFile", csvFile);
-    const res = await axios({
-      method: "post",
-      url: `http://127.0.0.1:8080/enhance/enhance_history/${username}/init/${faNodeId}`,
-      data: formData,
-      headers: {
-        "Content-Type": "multipart/form-data",
-        Authorization: `Bearer ${jwtToken}`,
-      },
-    });
-    return res.data;
-  } catch (e) {
-    ElMessage.warning((e as any).response.data.detail);
-    return { message: (e as any).response.data.detail };
-  }
+  const formData = new FormData();
+  formData.append("csvFile", csvFile);
+  const res = await $http.post(
+    `/enhance/enhance_history/${username}/init/${faNodeId}`,
+    formData,
+    { headers: { "Content-Type": "multipart/form-data" } },
+  );
+  return res.data;
 };
 
 export const excuteEnhance = async (

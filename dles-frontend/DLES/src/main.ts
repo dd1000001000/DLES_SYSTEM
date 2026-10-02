@@ -8,6 +8,7 @@ import "element-plus/dist/index.css";
 import { createPinia } from "pinia";
 
 import { useUserInofStore } from "./init-page/store/userInfo";
+import { LoginService } from "./login-page/service/login-servive";
 
 const app = createApp(App);
 app.use(ElementPlus);
@@ -20,20 +21,27 @@ app.use(createPinia());
 app.use(router);
 //路由守卫
 
-router.beforeEach((to, from, next) => {
+router.beforeEach(async (to, _from, next) => {
+  if (!to.matched.some((record) => record.meta.requiresAuth)) {
+    next();
+    return;
+  }
+  // 需要登录的页面：向后端确认登录状态（Cookie 里的凭证前端读不到，只能问后端）
   const userInfoStore = useUserInofStore();
-  const userToken = localStorage.getItem(userInfoStore.getStorageName);
-  if (to.matched.some((record) => record.meta.requiresAuth)) {
-    // 判断目标路由是否需要登录
-    if (!userToken) {
+  if (!userInfoStore.getUserName) {
+    const res = await new LoginService().getUserInfo();
+    if ("message" in res) {
       // 如果未登录，跳转到登录页面
       next({ path: "/login/login", query: { redirect: to.fullPath } });
-    } else {
-      next();
+      return;
     }
-  } else {
-    next();
+    userInfoStore.setUser({
+      userEmail: res.email,
+      avatarUrl: res.avatar_path,
+      userType: res.user_type,
+    });
   }
+  next();
 });
 
 app.mount("#app");

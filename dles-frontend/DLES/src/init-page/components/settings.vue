@@ -154,7 +154,7 @@ const changePasswordForm = ref({
 const settingsService = new SettingsService();
 const userStore = useUserInofStore();
 const changePasswordFormRef = ref<FormInstance>();
-const validatePassword = (rule: any, value: any, callback: any) => {
+const validatePassword = (_rule: any, value: any, callback: any) => {
   const passwordRegex = /^[A-Za-z0-9]{6,14}$/;
   if (value === "") {
     callback(new Error("请输入密码"));
@@ -168,7 +168,7 @@ const validatePassword = (rule: any, value: any, callback: any) => {
     callback();
   }
 };
-const validateConfirmedPassword = (rule: any, value: any, callback: any) => {
+const validateConfirmedPassword = (_rule: any, value: any, callback: any) => {
   if (value === "") {
     callback(new Error("请输入确认密码"));
   } else if (value !== changePasswordForm.value.password) {
@@ -194,7 +194,6 @@ function changePasswordManully(
         changePasswordForm.value.password,
       );
       if (!("message" in res)) {
-        localStorage.setItem(userStore.getStorageName, res.access_token);
         ElMessage.success("修改密码成功！");
         changePasswordForm.value.oldPassword = "";
         changePasswordForm.value.password = "";

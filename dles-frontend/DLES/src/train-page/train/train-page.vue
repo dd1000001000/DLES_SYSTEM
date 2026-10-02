@@ -170,7 +170,6 @@ import {
   type Ref,
   watchEffect,
   nextTick,
-  computed,
 } from "vue";
 import { v4 as uuidv4 } from "uuid";
 import { ElMessage, type UploadRawFile, type UploadProps } from "element-plus";
@@ -248,7 +247,7 @@ async function updateUUID() {
   try {
     const lastUuid = localStorage.getItem(strageName);
     if (lastUuid != null) {
-      const res = await trainService.clearCase(lastUuid);
+      await trainService.clearCase(lastUuid);
     }
     const uuid = uuidv4();
     localStorage.setItem(strageName, uuid);

@@ -95,13 +95,11 @@ export default {
 </script>
 
 <script lang="ts" setup>
-import { ref, computed, onMounted, nextTick } from "vue";
+import { ref, computed, nextTick } from "vue";
 import {
   Top,
   CopyDocument,
   Back,
-  Close,
-  ChatDotRound,
 } from "@element-plus/icons-vue";
 import { ElMessage } from "element-plus";
 import { CodeService } from "./service/code-service";
@@ -125,7 +123,8 @@ const highlightedCode = computed(() => {
   try {
     return hljs.highlight(codeText.value, { language: "javascript" }).value;
   } catch (e) {
-    return codeText.value;
+    // 高亮失败时回退为纯文本，必须转义，因为结果是通过 v-html 渲染的
+    return codeText.value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
   }
 });
 

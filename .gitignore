@@ -1,0 +1,43 @@
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editors / IDEs
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+*.suo
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.venv*/
+venv/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Logs
+*.log
+
+# Secrets / local environment
+.env
+*.env
+
+# Tooling output
+.VSCodeCounter/
+
+# Large local artifacts (data lake, models, embeddings)
+*.pth
+*.npy
+/datalake*/
+/temp_data_lake*/
+/temp_datalake*/
+/models/

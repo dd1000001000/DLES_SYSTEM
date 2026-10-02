@@ -1,0 +1,24 @@
+# Versions taken from the original development environment (Python 3.10).
+# For GPU support install torch from https://pytorch.org first (developed with 2.6.0+cu118).
+
+fastapi==0.115.11
+uvicorn==0.34.0
+python-multipart==0.0.20
+pydantic==2.10.6
+email-validator==2.2.0
+
+PyMySQL==1.1.1
+PyJWT==2.10.1
+passlib==1.7.4
+
+torch==2.6.0
+transformers==4.49.0
+numpy
+pandas
+scikit-learn
+lightgbm==4.6.0
+hdbscan==0.8.40
+tqdm
+
+openai==1.68.2
+python-dotenv

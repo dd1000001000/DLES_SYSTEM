@@ -4,11 +4,13 @@ import {
   userLogin,
   userInfo,
   userRecover,
+  userLogout,
 } from "../api/login-api";
 
 export class LoginService {
   async sendVerifyCode(email: string, type: "register" | "recover") {
     const res = await sendVerifyCode({ email: email, type: type });
+    return res;
   }
   async userRegister(email: string, verify_code: string, password: string) {
     const res = await userRegister({
@@ -20,6 +22,10 @@ export class LoginService {
   }
   async userLogin(username: string, password: string) {
     const res = await userLogin({ username: username, password: password });
+    return res;
+  }
+  async userLogout() {
+    const res = await userLogout();
     return res;
   }
   async getUserInfo() {

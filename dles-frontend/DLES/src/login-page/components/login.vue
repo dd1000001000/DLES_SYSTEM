@@ -46,11 +46,9 @@ export default {
 import { ref } from "vue";
 import { useRouter, useRoute } from "vue-router";
 import { LoginService } from "../service/login-servive";
-import { useUserInofStore } from "../../init-page/store/userInfo";
 
 const router = useRouter();
 const route = useRoute();
-const userStore = useUserInofStore();
 const loginService = new LoginService();
 
 const loginForm = ref({
@@ -64,7 +62,6 @@ async function userLogin() {
     loginForm.value.password,
   );
   if (!("message" in res)) {
-    localStorage.setItem(userStore.getStorageName, res.access_token);
     const redirect = (
       route.query.redirect === "/" ? "/home" : route.query.redirect || "/home"
     ) as string;

@@ -1,4 +1,3 @@
-import axios from "axios";
 import $http from "../../util/request";
 import type {
   SendEmail,
@@ -6,8 +5,6 @@ import type {
   UserLogin,
   UserRecover,
 } from "../type/login-type";
-import { stringify } from "../../util/stingfy";
-import { ElMessage } from "element-plus";
 
 export const sendVerifyCode = async (form: SendEmail) => {
   const res = await $http.post("/login/send_verify_code", form);
@@ -24,32 +21,21 @@ export const userRecover = async (form: UserRecover) => {
   return res.data;
 };
 
+export const userLogout = async () => {
+  const res = await $http.post("/login/logout");
+  return res.data;
+};
+
 export const userInfo = async () => {
   const res = await $http.post("/login/user/me");
   return res.data;
 };
 
 export const userLogin = async (form: UserLogin) => {
-  try {
-    const res = await axios({
-      method: "post",
-      url: "http://127.0.0.1:8080/login/login",
-      data: {
-        username: form.username,
-        password: form.password,
-      },
-      transformRequest: [
-        function (data) {
-          return stringify(data);
-        },
-      ],
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-    });
-    return res.data;
-  } catch (e) {
-    ElMessage.warning((e as any).response.data.detail);
-    return { message: (e as any).response.data.detail };
-  }
+  const res = await $http.post(
+    "/login/login",
+    new URLSearchParams({ username: form.username, password: form.password }),
+    { headers: { "Content-Type": "application/x-www-form-urlencoded" } },
+  );
+  return res.data;
 };

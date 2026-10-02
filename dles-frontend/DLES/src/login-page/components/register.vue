@@ -97,7 +97,6 @@ export default {
 import { reactive, ref } from "vue";
 import type { FormInstance, FormRules } from "element-plus";
 import { LoginService } from "../service/login-servive";
-import { useUserInofStore } from "../../init-page/store/userInfo";
 import { useRouter } from "vue-router";
 const registerForm = ref({
   username: "",
@@ -107,7 +106,6 @@ const registerForm = ref({
 });
 
 const loginService = new LoginService();
-const userStore = useUserInofStore();
 const router = useRouter();
 
 const isGetCodeButtonDisabled = ref(false);
@@ -134,7 +132,7 @@ function getVerifyCode() {
     }, 1000);
   });
 }
-const validUsername = (rule: any, value: any, callback: any) => {
+const validUsername = (_rule: any, value: any, callback: any) => {
   const emailRegex = /^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$/;
   if (value === "") {
     callback(new Error("请输入邮箱"));
@@ -144,14 +142,14 @@ const validUsername = (rule: any, value: any, callback: any) => {
     callback();
   }
 };
-const validVerifyCode = (rule: any, value: any, callback: any) => {
+const validVerifyCode = (_rule: any, value: any, callback: any) => {
   if (value === "") {
     callback(new Error("请输入邮箱验证码"));
   } else {
     callback();
   }
 };
-const validatePassword = (rule: any, value: any, callback: any) => {
+const validatePassword = (_rule: any, value: any, callback: any) => {
   const passwordRegex = /^[A-Za-z0-9]{6,14}$/;
   if (value === "") {
     callback(new Error("请输入密码"));
@@ -165,7 +163,7 @@ const validatePassword = (rule: any, value: any, callback: any) => {
     callback();
   }
 };
-const validateConfirmedPassword = (rule: any, value: any, callback: any) => {
+const validateConfirmedPassword = (_rule: any, value: any, callback: any) => {
   if (value === "") {
     callback(new Error("请输入确认密码"));
   } else if (value !== registerForm.value.password) {
@@ -192,7 +190,6 @@ function userRegister(registerFormRef: FormInstance | undefined) {
         registerForm.value.password,
       );
       if (!("message" in res)) {
-        localStorage.setItem(userStore.getStorageName, res.access_token);
         router.push("/home");
       }
     }

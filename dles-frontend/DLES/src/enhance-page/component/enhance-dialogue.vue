@@ -22,7 +22,7 @@
               v-else
               :src="
                 userInfoStore.avatarUrl
-                  ? `http://localhost:8080/avatars/${userInfoStore.avatarUrl}`
+                  ? avatarUrl(userInfoStore.avatarUrl)
                   : 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png'
               "
               :size="35"
@@ -102,9 +102,10 @@ export default {
 
 <script setup lang="ts">
 import { computed, ref, watch, type Ref } from "vue";
-import { MagicStick, Top, DocumentChecked } from "@element-plus/icons-vue";
+import { Top, DocumentChecked } from "@element-plus/icons-vue";
 import type { Dialogue } from "../type/enhance-dialouge-type";
 import { useUserInofStore } from "../../init-page/store/userInfo";
+import { avatarUrl } from "../../util/config";
 import { useRoute } from "vue-router";
 import { EnhanceHistoryService } from "../service/enhance-history-service";
 

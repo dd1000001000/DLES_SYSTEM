@@ -10,7 +10,7 @@
           :size="30"
           :src="
             userInfoStore.avatarUrl
-              ? `http://localhost:8080/avatars/${userInfoStore.avatarUrl}`
+              ? avatarUrl(userInfoStore.avatarUrl)
               : 'https://cube.elemecdn.com/3/7c/3ea6beec64369c2642b92c6726f1epng.png'
           "
         />
@@ -58,6 +58,7 @@ export default {
 import { Setting, SwitchButton } from "@element-plus/icons-vue";
 import { useRouter } from "vue-router";
 import { useUserInofStore } from "./store/userInfo";
+import { avatarUrl } from "../util/config";
 import { onMounted } from "vue";
 import { LoginService } from "../login-page/service/login-servive";
 
@@ -70,12 +71,13 @@ onMounted(async () => {
   userInfoStore.setUser({
     userEmail: res.email,
     avatarUrl: res.avatar_path,
-    userType: res.userType,
+    userType: res.user_type,
   });
 });
 
-function userLogout() {
-  localStorage.removeItem(userInfoStore.getStorageName);
+async function userLogout() {
+  // 让后端清掉 httpOnly Cookie
+  await loginService.userLogout();
   userInfoStore.clearUserInfo();
   router.push("/login/login");
 }

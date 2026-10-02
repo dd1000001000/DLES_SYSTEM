@@ -4,7 +4,6 @@ export const useUserInofStore = defineStore("userInfo", {
   state: () => ({
     userEmail: "",
     avatarUrl: "",
-    storageName: "DLES_SYS_JWT_TOKEN",
     userType: "",
   }),
   actions: {
@@ -23,7 +22,6 @@ export const useUserInofStore = defineStore("userInfo", {
     },
   },
   getters: {
-    getStorageName: (state) => state.storageName,
     getUserName: (state) => state.userEmail,
     getUserType: (state) => state.userType,
   },

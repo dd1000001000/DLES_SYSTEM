@@ -183,7 +183,6 @@ import {
   Plus,
   Delete,
   Edit,
-  ZoomIn,
   Check,
   DArrowRight,
   InfoFilled,
@@ -239,7 +238,7 @@ function handleCloseTreeMenu(event: MouseEvent) {
   const treeMenu = document.querySelector(".tree-menu");
   if (treeMenu && !treeMenu.contains(event.target as Node)) closeTreeMenu();
 }
-function openTreeMenu(event: any, data: any, node: any, target: any) {
+function openTreeMenu(event: any, data: any, _node: any, _target: any) {
   treeMenuState.value.currentNode = data;
   treeMenuState.value.menuShow = true;
   if (data.isFile) treeMenuState.value.allowAddFolder = false;
@@ -269,7 +268,7 @@ function openAddFolder() {
 }
 async function confirmAddFolder() {
   if (newFolderName.value.trim().length == 0) return;
-  const res = await enhanceHistoryService.addFolder(
+  await enhanceHistoryService.addFolder(
     userStore.getUserName,
     (treeMenuState.value.currentNode as any).id,
     newFolderName.value,
@@ -283,7 +282,7 @@ function openDeleteFolder() {
   isDeleteFolderDialougeOpen.value = true;
 }
 async function confirmDeleteOneFolder() {
-  const res = await enhanceHistoryService.deleteFolders(userStore.getUserName, [
+  await enhanceHistoryService.deleteFolders(userStore.getUserName, [
     (treeMenuState.value.currentNode as any).id,
   ]);
   window.location.reload();
@@ -298,7 +297,7 @@ function openEditFolder() {
 }
 async function confirmEditFolderName() {
   if (editFolderName.value.trim().length == 0) return;
-  const res = await enhanceHistoryService.changeFolderName(
+  await enhanceHistoryService.changeFolderName(
     userStore.getUserName,
     (treeMenuState.value.currentNode as any).id,
     editFolderName.value,
@@ -313,6 +312,8 @@ const historyInfo = ref({
   createTime: "",
   lastEditTime: "",
 });
+// 详情按钮目前在模板中被注释掉了，函数先保留
+// @ts-ignore TS6133
 async function openDetailFolder() {
   const res = await enhanceHistoryService.getDetailedInfo(
     userStore.getUserName,
@@ -329,7 +330,7 @@ async function batchDelete() {
   let deleteIds = [];
   for (const node of checkedNodes) deleteIds.push(node.id);
   if (deleteIds.length == 0) return;
-  const res = await enhanceHistoryService.deleteFolders(
+  await enhanceHistoryService.deleteFolders(
     userStore.getUserName,
     deleteIds,
   );

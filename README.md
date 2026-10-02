@@ -6,4 +6,4 @@
 
 ### About Design and Algorithms, please see my undergraduate thesis.
 
-### Thanks DEEPL translator!!!
+### Translated by GPT6.1 Sol

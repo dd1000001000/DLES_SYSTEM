@@ -44,4 +44,7 @@ test.py
 *.npy
 *.pth
 */full_trained_model.pth
-temp_csv_files/*
+temp_csv_files/
+# 用户用例数据（保留目录说明）
+enhance_history/*
+!enhance_history/readme.md

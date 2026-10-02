@@ -44,8 +44,11 @@ Secrets are read from environment variables. Copy `.env.example` to `dles-backen
 | `DLES_JWT_SECRET_KEY` | JWT signing key |
 | `DLES_MAIL_SENDER`, `DLES_MAIL_TOKEN` | SMTP account for verification mails |
 | `DASHSCOPE_API_KEY` | DashScope (Qwen) API key |
+| `DLES_COOKIE_SECURE` | Set to `1` when serving over HTTPS (login cookie is `Secure`) |
 
-Non-secret settings are in the `config.json` files next to each module: `database/` (MySQL user and database name), `utils/authorization/` (token lifetime), and `embedding/`, `transformer/`, `enhance/enhance_main/service/` (paths to the data lake, models and embedding folders, currently absolute `E:/DLES_System/...` paths — change them to your own).
+Login uses an `httpOnly`, `SameSite=Lax` cookie, so the frontend and the API must be on the same site (same hostname, ports may differ). The frontend uses the current page's hostname by default; override with `VITE_API_BASE_URL`. Changing the password invalidates all previously issued tokens, and failed logins are rate limited (in memory, per process).
+
+Non-secret settings are in the `config.json` files next to each module: `database/` (MySQL user, database name, optional `host`/`port`), `utils/authorization/` (token lifetime), and `embedding/`, `transformer/`, `enhance/enhance_main/service/` (paths to the data lake, models and embedding folders, currently absolute `E:/DLES_System/...` paths — change them to your own).
 
 ## Frontend
 

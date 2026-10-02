@@ -144,8 +144,13 @@ class LLMClient:
         return assistant_output, message, completion.model_dump()
 
     def long_chat(self, chat_history: List[Dict], user_input, output_json=True):
-        history = [{'role': h['role'], 'content': str(h['content'])} for h in chat_history]
-        history.append({'role': 'user', 'content': str(user_input)})
+        # 历史里助手的回复可能是解析好的 JSON 对象；必须序列化成 JSON，而不是 str()（那样是单引号的 Python 写法，
+        # 模型会跟着输出单引号，之后 json.loads 就解析不了）
+        def as_text(content) -> str:
+            return content if isinstance(content, str) else json.dumps(content, ensure_ascii=False)
+
+        history = [{'role': h['role'], 'content': as_text(h['content'])} for h in chat_history]
+        history.append({'role': 'user', 'content': as_text(user_input)})
         completion = self._create(history, output_json, None)
         assistant_output = self._content(completion)
         history.append({'role': 'assistant', 'content': assistant_output})

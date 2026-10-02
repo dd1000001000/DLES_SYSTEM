@@ -48,3 +48,6 @@ temp_csv_files/
 # 用户用例数据（保留目录说明）
 enhance_history/*
 !enhance_history/readme.md
+
+# 训练好的 Transformer 权重（约 75MB），随仓库提供
+!transformer/models/full_trained_model.pth

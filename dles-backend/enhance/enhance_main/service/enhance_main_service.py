@@ -15,17 +15,15 @@ from sklearn.preprocessing import LabelEncoder
 from transformers import pipeline
 
 from database.database import Database
-from embedding.jina_embedding import JinaEmbedding
+from embedding.table_embedding import TableEmbedding
 from enhance.LLM.key_word_extraction import KeyWordExtraction
 from settings.service.llm_config_service import get_llm_config
 from enhance.LLM.table_enhance_strategy_llm import TableEnhanceStrategyLLM
 from enhance.enhance_history_tree.enhance_history_tree import EnhanceHistoryTree
 from enhance.enhance_main.query_engine.query_engine import QueryEngine
 from logs.log import error_log
-# 强制导入，禁止删除
-from transformer.model import TableContrastiveModel, TransformerEncoder
 from transformer.transformer import Transformer
-from utils.read_config.read_config import read_config
+from utils.read_config.read_config import read_config, resolve_data_path
 
 config = read_config(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json'))
 
@@ -95,7 +93,7 @@ class EnhanceMainService:
             df[target_col] = df[target_col].fillna("unknown")
             return
         if self._filler is None:
-            self._filler = pipeline('fill-mask', model=config['bert_model_path'])
+            self._filler = pipeline('fill-mask', model=resolve_data_path(config['bert_model_path']))
         filler = self._filler
         null_indices = df[df[target_col].isnull()].index
         non_null_texts = non_null.astype(str)
@@ -158,60 +156,16 @@ class EnhanceMainService:
             related_tables_info = [self.read_csv_random_rows(related_table_path) for related_table_path in related_tables_path]
             table_enhance_strategy_LLM = TableEnhanceStrategyLLM(llm_config)
             enhance_strategy = table_enhance_strategy_LLM.ask(query_table_info,related_tables_info,self.enhance_paras)
+            if not isinstance(enhance_strategy, dict) or not any(
+                    isinstance(enhance_strategy.get(key), list) for key in ('join_operations', 'union_operations')):
+                raise Exception('模型没有返回有效的增强策略（缺少 join_operations / union_operations）。'
+                                '请检查模型配置，或换一个更强的模型；本地 Ollama 需要把上下文长度调大（OLLAMA_CONTEXT_LENGTH=16384）')
             user_query_table_df = pd.read_csv(os.path.join(self.enhance_case_path,'table.csv'), na_values = ['.', 'NA'])
             # related_table 1_index
             # 先处理JOIN操作
-            join_extra_flag = "_eCnIIm7B0TvO"
-            # 大模型的输出不可信，缺少字段或格式不对的操作直接跳过
-            join_operations = enhance_strategy.get('join_operations', [])
-            for join_operation in join_operations:
-                if len(join_operation) < 3:
-                    error_log(f'JOIN 操作的信息小于 3 列，无法执行：{str(join_operation)}')
-                    continue
-                column_q = join_operation[0]
-                try:
-                    table_id, column_r = join_operation[1].split('.', 1)
-                    table_id = int(table_id) - 1
-                except ValueError:
-                    error_log(f'JOIN 操作格式错误，无法执行：{str(join_operation)}')
-                    continue
-                keep_columns = list(set(join_operation[2:] + [column_r]))
-                if 0 <= table_id < len(related_tables_path) and column_q in user_query_table_df.columns:
-                    related_table_df = pd.read_csv(related_tables_path[table_id],na_values = ['.', 'NA'])
-                    if column_r not in related_table_df.columns:
-                        error_log(f'JOIN 操作的相关表中不存在列 {column_r}')
-                        continue
-                    related_table_df = related_table_df.filter(items=keep_columns)
-                    related_table_df = related_table_df.drop_duplicates(subset=[column_r])
-                    user_query_table_df = pd.merge(user_query_table_df,related_table_df,left_on=column_q,right_on=column_r,how='outer',suffixes=('', join_extra_flag))
-                    # 对于 JOIN 结果中额外的列做删除
-                    drop_cols = [col for col in user_query_table_df.columns if "_eCnIIm7B0TvO" in col]
-                    user_query_table_df = user_query_table_df.drop(columns=drop_cols)
-            # 再处理union操作
-            union_operations = enhance_strategy.get('union_operations', [])
-            if len(union_operations)%2 == 1:
-                error_log(f'联合操作的列表长度为奇数')
-                union_operations.pop()
-            # 对于每一个增强拼接成一个新的表格，然后concat到当前的表格下
-            # ['1.相关表列a','1.相关表列b+1.相关表列a','2.相关表列b','2.相关表列c+3.相关表列d'],['column1','column3','column2','column4']
-            # 这里需要有一个顺序进行 JOIN 操作，为了避免神秘的情况出现
-            for i in range(0,len(union_operations),2):
-                operations = union_operations[i]
-                column_names = union_operations[i+1]
-                if len(operations)!=len(column_names):
-                    error_log(f'union 操作的操作长度不一致')
-                    continue
-                try:
-                    union_df = self.get_join_table_df(operations,column_names,related_tables_path)
-                except (ValueError, IndexError, KeyError) as e:
-                    error_log(f'union 操作格式错误，无法执行：{operations}，原因：{e}')
-                    continue
-                if union_df is None:
-                    continue
-                user_query_table_df = user_query_table_df.loc[:, ~ user_query_table_df.columns.duplicated(keep='first')]
-                user_query_table_df = user_query_table_df.reset_index(drop=True)
-                union_df = union_df.reset_index(drop=True)
-                user_query_table_df = pd.concat([user_query_table_df,union_df],ignore_index=True).drop_duplicates()
+            # 大模型的输出不可信：每一个操作都单独校验、单独容错，一个操作有问题只跳过它，不影响其他操作
+            user_query_table_df = self.apply_join_operations(user_query_table_df, enhance_strategy.get('join_operations'), related_tables_path)
+            user_query_table_df = self.apply_union_operations(user_query_table_df, enhance_strategy.get('union_operations'), related_tables_path)
 
             self.fill_vacancy_values(user_query_table_df,self.enhance_paras['fill'])
             print(user_query_table_df)
@@ -220,6 +174,62 @@ class EnhanceMainService:
         except Exception as e:
             error_log(f'执行增强操作失败：{self.username} {self.enhance_id}，失败原因：{e}')
             raise e
+
+    @staticmethod
+    def _is_str_list(value) -> bool:
+        return isinstance(value, list) and all(isinstance(item, str) for item in value)
+
+    def apply_join_operations(self, df: pd.DataFrame, join_operations, related_tables_path: List[str]) -> pd.DataFrame:
+        """JOIN：把相关表里的列按连接列拼到用户表的右边（保留用户表的所有行）"""
+        join_extra_flag = "_eCnIIm7B0TvO"
+        for join_operation in (join_operations or []):
+            try:
+                if not self._is_str_list(join_operation) or len(join_operation) < 3:
+                    raise ValueError('JOIN 操作必须是至少 3 个字符串的列表')
+                column_q = join_operation[0]
+                table_id, column_r = join_operation[1].split('.', 1)
+                table_id = int(table_id) - 1
+                keep_columns = list(set(join_operation[2:] + [column_r]))
+                if not 0 <= table_id < len(related_tables_path):
+                    raise ValueError(f'相关表编号超出范围：{table_id + 1}')
+                if column_q not in df.columns:
+                    raise ValueError(f'用户表中不存在列 {column_q}')
+                related_table_df = pd.read_csv(related_tables_path[table_id], na_values=['.', 'NA'], encoding_errors='replace')
+                if column_r not in related_table_df.columns:
+                    raise ValueError(f'相关表中不存在列 {column_r}')
+                related_table_df = related_table_df.filter(items=keep_columns).drop_duplicates(subset=[column_r])
+                df = pd.merge(df, related_table_df, left_on=column_q, right_on=column_r, how='left', suffixes=('', join_extra_flag))
+                # 对于 JOIN 结果中额外的列做删除
+                df = df.drop(columns=[col for col in df.columns if join_extra_flag in col])
+            except Exception as e:
+                error_log(f'跳过无法执行的 JOIN 操作 {join_operation}：{e}')
+        return df
+
+    def apply_union_operations(self, df: pd.DataFrame, union_operations, related_tables_path: List[str]) -> pd.DataFrame:
+        """UNION：把相关表（可能先内部 JOIN）按列对应关系拼成新的行，追加到用户表下面"""
+        union_operations = union_operations or []
+        if len(union_operations) % 2 == 1:
+            error_log('联合操作的列表长度为奇数')
+            union_operations = union_operations[:-1]
+        # ['1.相关表列a','1.相关表列b+1.相关表列a','2.相关表列b','2.相关表列c+3.相关表列d'],['column1','column3','column2','column4']
+        for i in range(0, len(union_operations), 2):
+            operations, column_names = union_operations[i], union_operations[i + 1]
+            try:
+                if not (self._is_str_list(operations) and self._is_str_list(column_names)):
+                    raise ValueError('UNION 操作必须成对给出两个字符串列表')
+                if len(operations) != len(column_names) or len(operations) == 0:
+                    raise ValueError('UNION 操作的两个列表长度必须相同')
+                union_df = self.get_join_table_df(operations, column_names, related_tables_path)
+                if union_df is None:
+                    raise ValueError('UNION 操作引用了不存在的相关表')
+                df = df.loc[:, ~df.columns.duplicated(keep='first')].reset_index(drop=True)
+                combined = pd.concat([df, union_df.reset_index(drop=True)], ignore_index=True)
+                # 只对新追加的行去重（重复的新行丢掉），用户原表里的行不动
+                is_new_row = combined.index >= len(df)
+                df = combined[~(is_new_row & combined.duplicated())]
+            except Exception as e:
+                error_log(f'跳过无法执行的 UNION 操作 {operations}：{e}')
+        return df
 
     def get_join_table_df(self,list_operations:List,list_column_names:List,table_paths:List):
         def rename_and_filter_columns(df, column_mapping:Dict):
@@ -368,8 +378,8 @@ class EnhanceMainService:
     # 先处理表格的 embedding
     def get_embedding_before(self):
         try:
-            jina_embedding = JinaEmbedding(True)
-            jina_embedding.embedding_one(os.path.join(self.enhance_case_path, 'table.csv'),self.enhance_case_path,add_time_timestamp=False)
+            table_embedding = TableEmbedding(True)
+            table_embedding.embedding_one(os.path.join(self.enhance_case_path, 'table.csv'),self.enhance_case_path,add_time_timestamp=False)
             shutil.move(os.path.join(self.enhance_case_path, 'table.npy'), os.path.join(self.enhance_case_path, 'pure_embedding.npy'))
         except Exception as e:
             raise e
@@ -382,8 +392,8 @@ class EnhanceMainService:
             raise e
 
     def query(self,k:int):
-        jina_embedding = JinaEmbedding(False)
-        table_embedding = jina_embedding.read_embeddings(os.path.join(self.enhance_case_path, 'processed_embedding.npy'))
+        table_embedding = TableEmbedding(False)
+        table_embedding = table_embedding.read_embeddings(os.path.join(self.enhance_case_path, 'processed_embedding.npy'))
         q = QueryEngine()
         return q.query(table_embedding,k)
 
@@ -395,8 +405,8 @@ class EnhanceMainService:
     def query_brute_force(self,k:int):
         self.get_embedding_before()
         self.processed_embedding()
-        jina_embedding = JinaEmbedding(False)
-        table_embedding = jina_embedding.read_embeddings(os.path.join(self.enhance_case_path, 'processed_embedding.npy'))
+        table_embedding = TableEmbedding(False)
+        table_embedding = table_embedding.read_embeddings(os.path.join(self.enhance_case_path, 'processed_embedding.npy'))
         q = QueryEngine()
         return q.query_brute_force(table_embedding,k)
 

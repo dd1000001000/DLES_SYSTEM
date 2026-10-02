@@ -41,3 +41,6 @@ dist-ssr/
 /temp_data_lake*/
 /temp_datalake*/
 /models/
+
+# downloaded benchmark archives
+/_downloads/

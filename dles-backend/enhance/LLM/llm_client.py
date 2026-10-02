@@ -98,7 +98,7 @@ class LLMClient:
             base_url=base_url,
             max_retries=1,
             # 不跟随重定向：否则校验过的公网地址可以 302 到内网地址
-            http_client=httpx.Client(follow_redirects=False, timeout=httpx.Timeout(120.0, connect=10.0)),
+            http_client=httpx.Client(follow_redirects=False, timeout=httpx.Timeout(600.0, connect=10.0)),
         )
 
     def _create(self, messages: List[Dict], output_json: bool, max_tokens: Optional[int]):

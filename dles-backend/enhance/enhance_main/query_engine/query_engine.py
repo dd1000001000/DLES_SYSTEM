@@ -3,13 +3,14 @@ import threading
 import time
 
 import numpy as np
+import torch
 from numpy.typing import NDArray
 from tqdm import tqdm
 
 from database.database import Database
-from embedding.jina_embedding import JinaEmbedding
-from enhance.enhance_main.query_engine.engine_utils.graph import Graph
+from embedding.table_embedding import TableEmbedding
 from enhance.enhance_main.query_engine.engine_utils.graph2 import Graph2
+from transformer.similarity_torch import pairwise_distance_matrix
 
 
 class QueryEngine:
@@ -29,19 +30,21 @@ class QueryEngine:
             sql = 'SELECT * FROM table_base_info;'
             tables_info = db.execute_query(sql)
         tables = [None] * len(tables_info)
-        jina = JinaEmbedding(False)
+        embedder = TableEmbedding(False)
         for table_info in tables_info:
             save_path = table_info['processed_embedding_path']
             if save_path is None or not 1 <= table_info['table_id'] <= len(tables_info):
                 raise Exception(f"table_base_info 数据不完整（table_id={table_info['table_id']}），"
                                 "table_id 必须从 1 开始连续，且每张表都要有 processed_embedding_path")
-            embedding = jina.read_embeddings(save_path)
+            embedding = embedder.read_embeddings(save_path)
             tables[table_info['table_id'] - 1] = embedding
         return tables
 
     def build_graph(self):
         tables = self.load_embeddings()
-        QueryEngine.graph = Graph2(tables)
+        # 用 GPU 批量计算所有表格两两之间的距离，比逐对调用 numpy 版 Similarity 快几个数量级
+        distance = pairwise_distance_matrix(tables, device='cuda' if torch.cuda.is_available() else 'cpu')
+        QueryEngine.graph = Graph2(tables, distance=distance)
 
     def query(self,embedding:NDArray,k:int=1):
         return QueryEngine.graph.query_top_k(embedding,k)

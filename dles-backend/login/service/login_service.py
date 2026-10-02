@@ -6,7 +6,7 @@ from database.database import Database
 from enhance.enhance_history_tree.enhance_history_tree import EnhanceHistoryTree
 from logs.log import error_log
 from utils.authorization.authorization import hash_password, get_user, authenticate_user, ACCESS_TOKEN_EXPIRE_MINUTES, \
-    create_access_token
+    create_access_token, password_fingerprint
 from utils.mail.mail import send_verifycode
 from utils.verify_code.verify_code import consume_verify_code
 
@@ -15,19 +15,16 @@ class LoginService:
         pass
 
     def send_verify_code(self, receiver: str, send_type: str) -> bool:
-        try:
-            return send_verifycode(receiver, send_type)
-        except Exception as e:
-            error_log(f'发送验证码出现异常，原因: {e}')
-            return False
+        return send_verifycode(receiver, send_type)
 
-    def user_login(self, username, password):
-        user = authenticate_user(username, password)
+    def user_login(self, username, password, ip: str = ''):
+        user = authenticate_user(username, password, ip)
         if not user:
             return None
         access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
         access_token = create_access_token(
-            data={"sub": user['username']}, expires_delta=access_token_expires
+            data={"sub": user['username'], "pwd": password_fingerprint(user['password'])},
+            expires_delta=access_token_expires
         )
         return access_token
 
@@ -37,6 +34,8 @@ class LoginService:
     def user_register(self, username: str, verify_code: str, password: str) -> bool:
         if not self.is_password_valid(password):
             raise Exception('密码不是6-14位的大小写字母和数字的组合')
+        if re.search(r'[\\/]|\.\.', username):
+            raise Exception('邮箱包含不支持的字符')
         if get_user(username):
             raise Exception('该邮箱已经被注册')
         if not consume_verify_code(username, verify_code):
@@ -45,10 +44,9 @@ class LoginService:
             hashed_password = hash_password(password)
             enhance_history_tree = EnhanceHistoryTree(username)
             enhance_history_tree.init_history_tree()
-            db = Database()
-            sql = "INSERT INTO user (username,password,user_type) VALUES (%s, %s, 'user');"
-            db.execute_update(sql, (username, hashed_password))
-            db.close()
+            with Database() as db:
+                sql = "INSERT INTO user (username,password,user_type) VALUES (%s, %s, 'user');"
+                db.execute_update(sql, (username, hashed_password))
             return True
         except Exception as e:
             error_log(f'用户注册失败，原因: {e}')
@@ -63,10 +61,9 @@ class LoginService:
             raise Exception('用户还没有注册')
         try:
             hashed_password = hash_password(new_password)
-            db = Database()
-            sql = "UPDATE user SET password=%s WHERE username=%s;"
-            db.execute_update(sql, (hashed_password, username))
-            db.close()
+            with Database() as db:
+                sql = "UPDATE user SET password=%s WHERE username=%s;"
+                db.execute_update(sql, (hashed_password, username))
             return True
         except Exception as e:
             error_log(f'用户重置密码失败，原因: {e}')

@@ -41,7 +41,7 @@ class KeyWordExtraction:
         {
                 "type":"UNION",
                 "columns":[],
-                "number":6,
+                "number":10,
                 "fill":"MODEL"
             },
             ensure_ascii=False
@@ -78,8 +78,9 @@ A3：{A3}"""
     def query(self,chat_history:List[Dict],user_input:str,table_path:str):
         try:
             csv_headers = self.get_csv_headers(table_path)
-            u_input = user_input.strip()+f"这是这是我的表格列的名称：{str(csv_headers)}。"
-            query_result = json.loads(self.ask(chat_history,u_input)[0])
+            u_input = user_input.strip()+f"这是我的表格列的名称：{str(csv_headers)}。"
+            # 校验大模型返回的参数，格式不对就直接报错，而不是留到后面才出问题
+            query_result = json.loads(EnhanceParas(**json.loads(self.ask(chat_history,u_input)[0])).model_dump_json())
             history = copy.deepcopy(chat_history)
             history.append({"role":"user","content":user_input})
             history.append({"role":"assistant","content":query_result})

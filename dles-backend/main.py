@@ -17,6 +17,8 @@ app = FastAPI()
 origins = [
     "http://localhost:5173",
     "http://localhost:5174",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5174",
     "http://localhost",
     "http://localhost:8080",
 ]
@@ -38,8 +40,9 @@ app.include_router(router=train_router,prefix='/train',tags=['模型训练'])
 async def get_avatar(avatar_path: str):
     avatar_folder = os.path.abspath(
         os.path.join(os.path.dirname(os.path.abspath(__file__)), 'user_avatar'))
-    file_path = os.path.join(avatar_folder, avatar_path)
-    if os.path.exists(file_path):
+    file_path = os.path.abspath(os.path.join(avatar_folder, avatar_path))
+    # 防止通过 .. 或反斜杠读取头像目录之外的文件
+    if os.path.commonpath([avatar_folder, file_path]) == avatar_folder and os.path.isfile(file_path):
         return FileResponse(file_path)
     return {"message": "Avatar not found"}
 

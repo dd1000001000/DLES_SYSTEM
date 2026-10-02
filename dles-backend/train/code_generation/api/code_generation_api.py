@@ -11,7 +11,7 @@ from utils.authorization.models import User
 code_generation_router = APIRouter()
 
 @code_generation_router.post("/generate")
-async def code_generation( user_input:GeneCode, current_user: Annotated[User, Depends(get_current_user)]):
+def code_generation( user_input:GeneCode, current_user: Annotated[User, Depends(get_current_user)]):
     try:
         codeGenerationService = CodeGenerationService()
         result = codeGenerationService.ask(user_input.userCode,user_input.userInput)

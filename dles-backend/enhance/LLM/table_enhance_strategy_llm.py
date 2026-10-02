@@ -14,12 +14,12 @@ class TableEnhanceStrategyLLM:
         table_example = json.dumps([['column1 header', 'column2 header', 'column3 header'],
                          ['line1 column1', 'line1 column2', 'line1 column3'],
                          ['line2 column1', 'line2 column2', 'line2 column3']],ensure_ascii=False)
-        json_output = str({"join_operations":[],"union_operations":[]}).replace("'",'"')
-        join_output = str([['查询表列a','相关表编号.相关表列b','相关表保留列b','相关表保留列c']]).replace("'",'"')
+        json_output = json.dumps({"join_operations":[],"union_operations":[]},ensure_ascii=False)
+        join_output = json.dumps([['查询表列a','相关表编号.相关表列b','相关表保留列b','相关表保留列c']],ensure_ascii=False)
         join_output_explain = ("列表中的每一项都是列表，分别代表一个连接操作。"
                                "子列表的第一项和第二项代表被用作JOIN操作的两列，即使用用户查询表列a与相关表列b（由相关表编号确定相关表，按照自然数编号）进行JOIN操作。"
                                "子列表的剩下几项代表相关表的保留列，示例同时相关表保留列b和列c，相关表被用作JOIN操作的列必须出现在列表中，保留列必须来自被连接的相关表。")
-        union_output = str([['1.相关表列a','1.相关表列b+1.相关表列a','2.相关表列b','2.相关表列c+3.相关表列d','3.相关表列a'],['column1','column3','column2','column4','column5']]).replace("'",'"')
+        union_output = json.dumps([['1.相关表列a','1.相关表列b+1.相关表列a','2.相关表列b','2.相关表列c+3.相关表列d','3.相关表列a'],['column1','column3','column2','column4','column5']],ensure_ascii=False)
         union_output_explain = ("联合增强操作是一个长度为偶数的列表，列表中的每连续两项代表一个联合增强操作。"
                                 "连续两项中的第一个列表代表与了与查询表格进行UNION操作而通过相关表格得到的完整表格，每一项代表这一项由相关表格的哪张表格的哪一列组成。如果这项有'+'，则代表这一列是连接不同相关表格的JOIN列。"
                                 "连续两项中的第二个列表的第i列则是代表当前拼接出的表格的第i列与经过JOIN操作后的某列相互对应，输出的名称必须在JOIN后的表格中存在。")
@@ -31,7 +31,7 @@ class TableEnhanceStrategyLLM:
         join_table =[['movie name','data'],['name1','2024-10-11'],['name2','2025-01-01']]
         union_table = [['director name','date','movie name'],['director3','2023-12-31','name2'],['James Cameron','1997-12-19','RMS Titanic']]
         json_enhance_input = json.dumps({"enhance_paras":enhance_para,"query_table":query_table,"related_tables":[join_table,union_table]},ensure_ascii=False)
-        join_enhance_output = str({"join_operations":[['date','1.date','date','movie name']],"union_operations":[['2.director name','2.date','2.movie name'],['director','date','movie name']]}).replace("'",'"')
+        join_enhance_output = json.dumps({"join_operations":[['date','1.date','date','movie name']],"union_operations":[['2.director name','2.date','2.movie name'],['director','date','movie name']]},ensure_ascii=False)
 
         prompt = f"""你是一个表格增强专家，请结合用户查询表、相关表信息和增强参数给出对用户查询表进行增强的增强建议。
 查询表和相关表均为二维数组，首行为列头，相关表编号从1开始（如第一个相关表为表1）。
@@ -60,7 +60,8 @@ A：{join_enhance_output}
 
     def ask(self,query_table:List[List],related_tables:List[List],enhance_paras:Dict):
         try:
-            user_input = str({"enhance_paras":enhance_paras,"query_table":query_table,"related_tables":related_tables}).replace("'",'"')
+            # 表格单元格里可能有引号等字符，必须用 json.dumps 序列化
+            user_input = json.dumps({"enhance_paras":enhance_paras,"query_table":query_table,"related_tables":related_tables},ensure_ascii=False)
             return json.loads(self.qwen.ask_one(self.prompt,user_input)[0])
         except Exception as e:
             raise e

@@ -1,13 +1,13 @@
 # -*- coding: utf-8 -*-
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, UploadFile
+from fastapi import APIRouter, Depends, Response, UploadFile
 from starlette import status
 from starlette.responses import JSONResponse
 
 from login.service.login_service import LoginService
 from settings.model.models import ChangePassword
-from utils.authorization.authorization import get_current_user
+from utils.authorization.authorization import get_current_user, set_auth_cookie
 from utils.authorization.models import User, Token
 from ..service.settings_service import SettingsService
 
@@ -15,8 +15,8 @@ settings_router = APIRouter()
 
 
 @settings_router.post('/change_password')
-async def user_change_password(change_password_form: ChangePassword,
-                               current_user: Annotated[User, Depends(get_current_user)]):
+def user_change_password(change_password_form: ChangePassword, response: Response,
+                         current_user: Annotated[User, Depends(get_current_user)]):
     try:
         settings_service = SettingsService(current_user['username'])
         change_result = settings_service.change_password(change_password_form.old_password,
@@ -28,6 +28,7 @@ async def user_change_password(change_password_form: ChangePassword,
             )
         login_service = LoginService()
         login_result = login_service.user_login(current_user['username'], change_password_form.new_password)
+        set_auth_cookie(response, login_result)
         return Token(access_token=login_result, token_type="bearer")
     except Exception as e:
         return JSONResponse(
@@ -37,7 +38,7 @@ async def user_change_password(change_password_form: ChangePassword,
 
 
 @settings_router.post('/upload_avatar')
-async def upload_avatar(avatar: UploadFile, current_user: Annotated[User, Depends(get_current_user)]):
+def upload_avatar(avatar: UploadFile, current_user: Annotated[User, Depends(get_current_user)]):
     try:
         settings_service = SettingsService(current_user['username'])
         save_result = settings_service.save_avatar(avatar)

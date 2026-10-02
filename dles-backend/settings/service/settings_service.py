@@ -1,13 +1,16 @@
 # -*- coding: utf-8 -*-
 import os
 import re
-import shutil
 
 from fastapi import UploadFile
 
 from database.database import Database
 from logs.log import error_log
 from utils.authorization.authorization import authenticate_user, hash_password
+from utils.upload import safe_filename, save_upload
+
+AVATAR_EXTENSIONS = {'.png', '.jpg', '.jpeg', '.gif', '.webp'}
+AVATAR_MAX_BYTES = 2 * 1024 * 1024
 
 
 class SettingsService:
@@ -15,6 +18,7 @@ class SettingsService:
         self.username = username
         self.avatar_folder = os.path.abspath(
             os.path.join(os.path.dirname(os.path.abspath(__file__)), '../../user_avatar'))
+        os.makedirs(self.avatar_folder, exist_ok=True)
 
     def is_password_valid(self, password: str) -> bool:
         return bool(re.fullmatch(r'[A-Za-z0-9]{6,14}', password))
@@ -26,10 +30,9 @@ class SettingsService:
             raise Exception('新密码不是6-14位的大小写字母和数字的组合')
         try:
             hashed_password = hash_password(new_password)
-            db = Database()
-            sql = "UPDATE user SET password=%s WHERE username=%s;"
-            db.execute_update(sql, (hashed_password, self.username))
-            db.close()
+            with Database() as db:
+                sql = "UPDATE user SET password=%s WHERE username=%s;"
+                db.execute_update(sql, (hashed_password, self.username))
             return True
         except Exception as e:
             error_log(f'用户修改密码失败，原因: {e}')
@@ -37,30 +40,22 @@ class SettingsService:
 
     def save_avatar(self, user_avatar: UploadFile):
         try:
-            db = Database()
-            sql = "SELECT avatar_path FROM user WHERE username=%s;"
-            result = db.execute_query(sql, (self.username,))
-            db.close()
-            if len(result) > 0 and result[0]['avatar_path'] is not None:
-                file_path = os.path.join(self.avatar_folder, result[0]['avatar_path'])
-                if os.path.exists(file_path):
-                    os.remove(file_path)
-        except Exception as e:
-            error_log(f'删除用户旧头像失败，原因：{e}')
-            return None
-        try:
-            safe_filename = os.path.basename((user_avatar.filename or '').replace('\\', '/'))
-            file_name = f'{self.username}_{safe_filename}'
-            with open(os.path.join(self.avatar_folder, file_name), "wb") as file:
-                shutil.copyfileobj(user_avatar.file, file)
-            if os.path.exists(os.path.join(self.avatar_folder, file_name)):
-                db = Database()
-                sql = "UPDATE user SET avatar_path=%s WHERE username=%s;"
-                db.execute_update(sql, (file_name, self.username))
-                db.close()
-                return file_name
-            else:
-                return None
+            original_name = safe_filename(user_avatar.filename)
+            if os.path.splitext(original_name)[1].lower() not in AVATAR_EXTENSIONS:
+                raise Exception('头像必须是 png、jpg、gif 或 webp 图片')
+            file_name = f'{self.username}_{original_name}'
+            new_path = os.path.join(self.avatar_folder, file_name)
+            # 先查出旧头像，新头像保存成功后再删除
+            with Database() as db:
+                result = db.execute_query("SELECT avatar_path FROM user WHERE username=%s;", (self.username,))
+                old_avatar = result[0]['avatar_path'] if len(result) > 0 else None
+                save_upload(user_avatar, new_path, AVATAR_MAX_BYTES)
+                db.execute_update("UPDATE user SET avatar_path=%s WHERE username=%s;", (file_name, self.username))
+            if old_avatar and old_avatar != file_name:
+                old_path = os.path.join(self.avatar_folder, safe_filename(old_avatar))
+                if os.path.exists(old_path):
+                    os.remove(old_path)
+            return file_name
         except Exception as e:
             error_log(f'保存用户新头像失败，原因：{e}')
             return None

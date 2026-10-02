@@ -4,11 +4,13 @@ from typing import List, Dict
 
 from openai import OpenAI
 
+from utils.read_config.read_config import get_env
+
 
 class Qwen:
     def __init__(self,model_name:str="qwen-plus"):
         self.model_name = model_name
-        self.api_key = "sk-af004499793b414b850149e572e056ad"
+        self.api_key = get_env("DASHSCOPE_API_KEY")
         self.base_url = "https://dashscope.aliyuncs.com/compatible-mode/v1"
         self.client = OpenAI(api_key=self.api_key,base_url=self.base_url)
 

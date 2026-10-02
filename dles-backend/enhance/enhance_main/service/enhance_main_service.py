@@ -134,9 +134,9 @@ class EnhanceMainService:
             related_tables = self.query_tables(k)
             related_tables_path = []
             for table_id,score in related_tables:
-                select_sql = f"SELECT * FROM table_base_info WHERE table_id={table_id+1}"
+                select_sql = "SELECT * FROM table_base_info WHERE table_id=%s"
                 db=Database()
-                sql_result = db.execute_query(select_sql)
+                sql_result = db.execute_query(select_sql, (int(table_id)+1,))
                 db.close()
                 if len(sql_result) == 0:
                     raise Exception(f'id 为 {table_id+1} 的相关表格查找不到')

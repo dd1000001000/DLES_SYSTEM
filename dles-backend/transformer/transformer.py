@@ -54,8 +54,8 @@ class Transformer:
                     filename = Path(filename).as_posix()
                     save_name = Path(save_name).as_posix()
                     db = Database()
-                    sql = f"UPDATE table_base_info SET processed_embedding_path = '{save_name}' WHERE pure_embedding_path = '{filename}';"
-                    db.execute_update(sql)
+                    sql = "UPDATE table_base_info SET processed_embedding_path = %s WHERE pure_embedding_path = %s;"
+                    db.execute_update(sql, (save_name, filename))
                     db.close()
                     print(f'成功转化表格：{filename}')
                 except Exception as e:

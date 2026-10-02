@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-from enhance.qwen.qwen import Qwen
+from enhance.LLM.llm_client import LLMClient, LLMConfig
 
 
 class CodeGenerationLLM:
-    def __init__(self,model_name:str="qwen-coder-plus"):
-        self.qwen = Qwen(model_name)
+    def __init__(self,config:LLMConfig):
+        self.llm = LLMClient(config, config.code_model_or_default)
         self.prompt = self.get_prompt()
 
     def get_prompt(self):
@@ -15,7 +15,7 @@ class CodeGenerationLLM:
         user_input = user_require
         if user_code.strip() != "":
             user_input += f"\n这是我的代码：\n{user_code}"
-        result = self.qwen.ask_one(self.prompt,user_input,False)[0]
+        result = self.llm.ask_one(self.prompt,user_input,False)[0]
         result_list = result.split("\n")
         result_list = [line for line in result_list if '```' not in line]
         result = '\n'.join(result_list)

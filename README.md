@@ -23,7 +23,7 @@ dles-frontend/DLES Vue 3 web client
 - A local data lake of CSV tables, plus the pretrained models
   [`jinaai/jina-embeddings-v2-base-en`](https://huggingface.co/jinaai/jina-embeddings-v2-base-en) and
   [`google-bert/bert-base-uncased`](https://huggingface.co/google-bert/bert-base-uncased)
-- A [DashScope](https://dashscope.aliyun.com/) API key for the Qwen LLM calls
+- An OpenAI-compatible model service (OpenAI, DashScope, DeepSeek, Ollama, ...). Each user enters the endpoint, API key and model names in the web UI under Settings → 模型配置; table enhancement and AI code generation use them
 
 ## Backend
 
@@ -43,7 +43,8 @@ Secrets are read from environment variables. Copy `.env.example` to `dles-backen
 | `DLES_DB_PASSWORD` | MySQL password |
 | `DLES_JWT_SECRET_KEY` | JWT signing key |
 | `DLES_MAIL_SENDER`, `DLES_MAIL_TOKEN` | SMTP account for verification mails |
-| `DASHSCOPE_API_KEY` | DashScope (Qwen) API key |
+| `DLES_ENCRYPTION_KEY` | Optional Fernet key for encrypting users' saved model API keys (derived from `DLES_JWT_SECRET_KEY` if empty) |
+| `DLES_ALLOW_PRIVATE_LLM_ENDPOINTS` | `1` allows model endpoints on localhost/private addresses (Ollama, vLLM). Keep `0` on a shared server to prevent SSRF |
 | `DLES_COOKIE_SECURE` | Set to `1` when serving over HTTPS (login cookie is `Secure`) |
 
 Login uses an `httpOnly`, `SameSite=Lax` cookie, so the frontend and the API must be on the same site (same hostname, ports may differ). The frontend uses the current page's hostname by default; override with `VITE_API_BASE_URL`. Changing the password invalidates all previously issued tokens, and failed logins are rate limited (in memory, per process).

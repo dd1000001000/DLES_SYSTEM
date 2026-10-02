@@ -3,11 +3,11 @@ import json
 from typing import List, Dict
 
 from enhance.enhance_main.model.models import EnhanceParas
-from enhance.qwen.qwen import Qwen
+from enhance.LLM.llm_client import LLMClient, LLMConfig, parse_json_output
 
 class TableEnhanceStrategyLLM:
-    def __init__(self,model_name:str="deepseek-v3"):
-        self.qwen = Qwen(model_name)
+    def __init__(self,config:LLMConfig):
+        self.llm = LLMClient(config, config.strategy_model_or_default)
         self.prompt = self.get_prompt()
 
     def get_prompt(self):
@@ -62,20 +62,7 @@ A：{join_enhance_output}
         try:
             # 表格单元格里可能有引号等字符，必须用 json.dumps 序列化
             user_input = json.dumps({"enhance_paras":enhance_paras,"query_table":query_table,"related_tables":related_tables},ensure_ascii=False)
-            return json.loads(self.qwen.ask_one(self.prompt,user_input)[0])
+            return parse_json_output(self.llm.ask_one(self.prompt,user_input)[0])
         except Exception as e:
             raise e
 
-if __name__ == '__main__':
-    obj = TableEnhanceStrategyLLM()
-    print(obj.prompt)
-    query_table = [['id','name','department'],['001','chen','physics'],['002','ding','math']]
-    related_table_one = [['department','established date'],['math','1990-01-03'],['pyhsics','2000-01-01'],['computer','2005-10-01']]
-    related_table_two = [['staff name','department'],['li','math'],['wang','math']]
-    related_table = [related_table_one,related_table_two]
-    enhance_paras = {"type":"BOTH",
-                    "columns":['department'],
-                    "number":6,
-                    "fill":"MODEL"}
-    result = obj.ask(query_table,related_table,enhance_paras)
-    print(result)

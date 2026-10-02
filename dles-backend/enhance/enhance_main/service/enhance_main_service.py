@@ -17,6 +17,7 @@ from transformers import pipeline
 from database.database import Database
 from embedding.jina_embedding import JinaEmbedding
 from enhance.LLM.key_word_extraction import KeyWordExtraction
+from settings.service.llm_config_service import get_llm_config
 from enhance.LLM.table_enhance_strategy_llm import TableEnhanceStrategyLLM
 from enhance.enhance_history_tree.enhance_history_tree import EnhanceHistoryTree
 from enhance.enhance_main.query_engine.query_engine import QueryEngine
@@ -141,6 +142,8 @@ class EnhanceMainService:
         try:
             if self.enhance_paras is None:
                 raise Exception("增强参数不存在，无法执行增强")
+            # 先取模型配置：没配置就直接报错，不用白白跑完耗时的向量化和检索
+            llm_config = get_llm_config(self.username)
             related_tables = self.query_tables(k)
             related_tables_path = []
             for table_id,score in related_tables:
@@ -153,7 +156,7 @@ class EnhanceMainService:
 
             query_table_info = self.read_csv_random_rows(os.path.join(self.enhance_case_path,'table.csv'))
             related_tables_info = [self.read_csv_random_rows(related_table_path) for related_table_path in related_tables_path]
-            table_enhance_strategy_LLM = TableEnhanceStrategyLLM()
+            table_enhance_strategy_LLM = TableEnhanceStrategyLLM(llm_config)
             enhance_strategy = table_enhance_strategy_LLM.ask(query_table_info,related_tables_info,self.enhance_paras)
             user_query_table_df = pd.read_csv(os.path.join(self.enhance_case_path,'table.csv'), na_values = ['.', 'NA'])
             # related_table 1_index
@@ -327,7 +330,7 @@ class EnhanceMainService:
     def extraction_dialogue(self,chat_history:List[Dict],user_input:str):
         try:
             # 在最后写入json
-            extraction_engine = KeyWordExtraction()
+            extraction_engine = KeyWordExtraction(get_llm_config(self.username))
             history = copy.deepcopy(chat_history)
             history = history[:-1]
             user_pure_input = user_input.replace("开始增强","").strip()

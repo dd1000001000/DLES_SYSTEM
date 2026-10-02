@@ -20,3 +20,13 @@ CREATE TABLE IF NOT EXISTS table_base_info (
   pure_embedding_path     VARCHAR(512) NULL,
   processed_embedding_path VARCHAR(512) NULL
 );
+
+-- Per-user model endpoint settings (created automatically on first use if missing).
+CREATE TABLE IF NOT EXISTS user_llm_config (
+  username          VARCHAR(255) PRIMARY KEY,
+  base_url          VARCHAR(512) NOT NULL,
+  api_key_encrypted TEXT         NOT NULL,
+  chat_model        VARCHAR(255) NOT NULL,
+  strategy_model    VARCHAR(255) NOT NULL DEFAULT '',
+  code_model        VARCHAR(255) NOT NULL DEFAULT ''
+);

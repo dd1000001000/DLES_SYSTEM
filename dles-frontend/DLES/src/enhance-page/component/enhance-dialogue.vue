@@ -146,7 +146,7 @@ async function startEnhance() {
   inputDisabled.value = true;
   const copiedDialogue: Ref<Dialogue[]> = ref([]);
   copiedDialogue.value = JSON.parse(JSON.stringify(dialogue.value));
-  dialogue.value.push({ role: "assistant", content: "Qwen 正在思考。。。" });
+  dialogue.value.push({ role: "assistant", content: "模型正在思考。。。" });
   const res = await enhanceHistoryService.excuteEnhance(
     userInfoStore.getUserName,
     Number(id.value),

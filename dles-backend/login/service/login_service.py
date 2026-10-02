@@ -46,8 +46,8 @@ class LoginService:
             enhance_history_tree = EnhanceHistoryTree(username)
             enhance_history_tree.init_history_tree()
             db = Database()
-            sql = f"INSERT INTO user (username,password,user_type) VALUES ('{username}','{hashed_password}','user');"
-            db.execute_update(sql)
+            sql = "INSERT INTO user (username,password,user_type) VALUES (%s, %s, 'user');"
+            db.execute_update(sql, (username, hashed_password))
             db.close()
             return True
         except Exception as e:
@@ -64,8 +64,9 @@ class LoginService:
         try:
             hashed_password = hash_password(new_password)
             db = Database()
-            sql = f"UPDATE user SET password='{hashed_password}' WHERE username='{username}';"
-            db.execute_update(sql)
+            sql = "UPDATE user SET password=%s WHERE username=%s;"
+            db.execute_update(sql, (hashed_password, username))
+            db.close()
             return True
         except Exception as e:
             error_log(f'用户重置密码失败，原因: {e}')

@@ -1,18 +1,15 @@
 # -*- coding: utf-8 -*-
-import os
 import random
 import smtplib
 import string
 from email.mime.text import MIMEText
 
 from logs.log import error_log, info_log
-from utils.read_config.read_config import read_config
+from utils.read_config.read_config import get_env
 from utils.verify_code.verify_code import add_or_update_verify_code
 
-config = read_config(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json'))
-
-my_sender = config['mail_sender']
-token = config['mail_token']
+my_sender = get_env('DLES_MAIL_SENDER')
+token = get_env('DLES_MAIL_TOKEN')
 
 
 def mail(title: str, text: str, receiver: str) -> bool:

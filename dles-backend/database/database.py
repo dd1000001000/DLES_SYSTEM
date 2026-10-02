@@ -3,7 +3,7 @@ import os
 import pymysql
 
 from logs.log import error_log, info_log
-from utils.read_config.read_config import read_config
+from utils.read_config.read_config import get_env, read_config
 
 config = read_config(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json'))
 
@@ -12,7 +12,7 @@ class Database:
     def __init__(self):
         self.host = '127.0.0.1'
         self.user = config['username']
-        self.password = config['password']
+        self.password = get_env('DLES_DB_PASSWORD')
         self.database = config['database_name']
         self.connection = None
         self.cursor = None
@@ -32,9 +32,9 @@ class Database:
             self.connection = None
             self.cursor = None
 
-    def execute_query(self, query) -> list:
+    def execute_query(self, query, params=None) -> list:
         if self.cursor:
-            self.cursor.execute(query)
+            self.cursor.execute(query, params)
             columns = [column[0] for column in self.cursor.description]
             results = self.cursor.fetchall()
             dict_list = [dict(zip(columns, row)) for row in results]
@@ -43,9 +43,9 @@ class Database:
             error_log(f'连接尚未建立: {query}')
             return None
 
-    def execute_update(self, update):
+    def execute_update(self, update, params=None):
         if self.cursor:
-            self.cursor.execute(update)
+            self.cursor.execute(update, params)
             self.connection.commit()
             info_log(f'数据库修改成功: {update}')
         else:

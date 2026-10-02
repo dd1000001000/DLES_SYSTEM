@@ -181,8 +181,8 @@ class JinaEmbedding:
                     filename = Path(filename).as_posix()
                     save_name = Path(save_name).as_posix()
                     db=Database()
-                    sql = f"INSERT INTO table_base_info (table_path, pure_embedding_path) VALUES ('{filename}','{save_name}');"
-                    db.execute_update(sql)
+                    sql = "INSERT INTO table_base_info (table_path, pure_embedding_path) VALUES (%s, %s);"
+                    db.execute_update(sql, (filename, save_name))
                     db.close()
                     print(f'成功向量化表格: {filename}')
                 except Exception as e:

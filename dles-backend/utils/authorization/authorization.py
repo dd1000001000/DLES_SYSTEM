@@ -11,10 +11,10 @@ from jwt.exceptions import InvalidTokenError
 from passlib.context import CryptContext
 
 from database.database import Database
-from utils.read_config.read_config import read_config
+from utils.read_config.read_config import get_env, read_config
 
 config = read_config(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'config.json'))
-SECRET_KEY = config['SECRET_KEY']
+SECRET_KEY = get_env('DLES_JWT_SECRET_KEY')
 ALGORITHM = config['ALGORITHM']
 ACCESS_TOKEN_EXPIRE_MINUTES = config['ACCESS_TOKEN_EXPIRE_MINUTES']
 
@@ -28,8 +28,8 @@ def hash_password(password: str):
 
 def get_user(username: str):
     db = Database()
-    sql = f"SELECT * FROM user WHERE username='{username}';"
-    user = db.execute_query(sql)
+    sql = "SELECT * FROM user WHERE username=%s;"
+    user = db.execute_query(sql, (username,))
     db.close()
     if len(user) == 0:
         return None

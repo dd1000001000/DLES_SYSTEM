@@ -27,8 +27,8 @@ class SettingsService:
         try:
             hashed_password = hash_password(new_password)
             db = Database()
-            sql = f"UPDATE user SET password='{hashed_password}' WHERE username='{self.username}';"
-            db.execute_update(sql)
+            sql = "UPDATE user SET password=%s WHERE username=%s;"
+            db.execute_update(sql, (hashed_password, self.username))
             db.close()
             return True
         except Exception as e:
@@ -38,8 +38,8 @@ class SettingsService:
     def save_avatar(self, user_avatar: UploadFile):
         try:
             db = Database()
-            sql = f"SELECT avatar_path FROM user WHERE username='{self.username}';"
-            result = db.execute_query(sql)
+            sql = "SELECT avatar_path FROM user WHERE username=%s;"
+            result = db.execute_query(sql, (self.username,))
             db.close()
             if len(result) > 0 and result[0]['avatar_path'] is not None:
                 file_path = os.path.join(self.avatar_folder, result[0]['avatar_path'])
@@ -49,13 +49,14 @@ class SettingsService:
             error_log(f'删除用户旧头像失败，原因：{e}')
             return None
         try:
-            file_name = f'{self.username}_{user_avatar.filename}'
+            safe_filename = os.path.basename((user_avatar.filename or '').replace('\\', '/'))
+            file_name = f'{self.username}_{safe_filename}'
             with open(os.path.join(self.avatar_folder, file_name), "wb") as file:
                 shutil.copyfileobj(user_avatar.file, file)
             if os.path.exists(os.path.join(self.avatar_folder, file_name)):
                 db = Database()
-                sql = f"UPDATE user SET avatar_path='{file_name}' WHERE username='{self.username}';"
-                db.execute_update(sql)
+                sql = "UPDATE user SET avatar_path=%s WHERE username=%s;"
+                db.execute_update(sql, (file_name, self.username))
                 db.close()
                 return file_name
             else:

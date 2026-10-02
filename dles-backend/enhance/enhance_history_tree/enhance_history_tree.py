@@ -38,8 +38,8 @@ class EnhanceHistoryTree:
         try:
             os.mkdir(os.path.join(self.history_folder_path, self.username))
             db = Database()
-            sql = f"INSERT INTO enhance_history (username, history_tree) VALUES ('{self.username}', '{history_tree.model_dump_json()}');"
-            db.execute_update(sql)
+            sql = "INSERT INTO enhance_history (username, history_tree) VALUES (%s, %s);"
+            db.execute_update(sql, (self.username, history_tree.model_dump_json()))
             db.close()
         except Exception as e:
             error_log(f"初始化用户增强记录树失败，原因: {e}")
@@ -47,8 +47,8 @@ class EnhanceHistoryTree:
     def get_user_tree(self):
         try:
             db = Database()
-            sql = f"SELECT history_tree FROM enhance_history WHERE username='{self.username}';"
-            tree = db.execute_query(sql)
+            sql = "SELECT history_tree FROM enhance_history WHERE username=%s;"
+            tree = db.execute_query(sql, (self.username,))
             db.close()
             if len(tree) == 0:
                 return None
@@ -60,8 +60,8 @@ class EnhanceHistoryTree:
     def update_history_tree_to_db(self, history_tree: HistoryTreeNode):
         try:
             db = Database()
-            sql = f"UPDATE enhance_history SET history_tree='{history_tree.model_dump_json()}' WHERE username='{self.username}';"
-            db.execute_update(sql)
+            sql = "UPDATE enhance_history SET history_tree=%s WHERE username=%s;"
+            db.execute_update(sql, (history_tree.model_dump_json(), self.username))
             db.close()
         except Exception as e:
             raise e
